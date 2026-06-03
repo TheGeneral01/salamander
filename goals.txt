@@ -1,0 +1,50 @@
+Okay, so SAL should be able to do a few things at the very minimum:
+Btw it stands for:
+Simple
+Abstract
+Language
+
+1. Be able to preform basic operations (duh) like +, -, *. /, +=, -=, *=, /=, !, !/, ||
+2. Be able to dynamically interpret strings, like std::string in C++, but with the added ability of things like Python's f"{item1} Hello" system.
+3. It should be able to create static functions like int my_function(some_args) {}, or with Python's style int myfunction(some_args):.
+4. It should be able to create dynamic functions using type dyn, which behaves like a function in Python, and relies on arguments given into it, as well as how functions would behave in Python. 
+5. Constructors like in C++ should use @original_var(argument) somewhere between the function and the definition.
+5.a This means that it should be funct(arg) @ogArg(arg): (Single line only)
+5.b For multi-line, funct(arg) @ogArg(arg) {}
+6. For variable creation, it can inherit the same properties as the functions.
+6.a A variable could be called "dyn my_var = x", where it essentially becomes a smart pointer. Or it can mutate to static datatypes like my_var = "123" or my_var = 123 (string vs int).
+6.b Will implement dynamic lists as the default, so standard Python behavior.
+6.c Also allow for static lists, where the item inside must be known.
+7. All data, should be able to inherit the static tag, meaning it cannot leave it's namespace.
+7.a Constants can be marked with const, although if it's never changed, the compiler should just mark it as a const in ASM.
+7.b It should have some ability to be able to interface with other languages.
+8. Oh yeah obv it should be able to make ASM from SAL.
+9. Inline assembly should be allowed and marked with the standard c++ style __asm__, but would be like a function, so __asm__(arg1, arg2) {}. That way it can be a return value.
+10. No .h files or similar, just like Python.
+11. Objects can inherit the friend() system, where you could say friend(object1, object2), which lets those objects access each other's data, even with static tags or in completely separate files (they must be linked though).
+12. You should be able to sort objects based on their types in dynamic objects, data, etc... So say new_list = mylist.from(type) would extract all objects of type x in whatever order they are in, and put them into that new list.
+13. Variables should be global by default, and if two of the same variable are declared in separate but linked files, it should automatically join them to one variable. (This is why namespaces are important).
+14. Have switches with cases.
+15. Needs some sort of automatic garbage system, so that way variables of any size are (technically) supported. This would be done with an automatic reference counting system, which just deletes the variable whenever it isn't used anymore.
+16. Lambda expressions should be called every time, and would be treated as a pointer to a lambda of some sort. Idk.
+17. Should be able to mark function arguments as const, so it uses the original value instead, so there's no issue with pointers and memory addresses.
+18. Data should be able to be created in any order, meaning that a variable at the bottom of the file is accessible to the top. While this technically isn't recommended, it's mostly for ease of use, since it means that variables just become global by default. It becomes up to the user, program behaves the same as if it was statically loaded anyways.
+7.0.v1 Data should inherit local tags to stay within a file.
+19. Certain tags should be overridable, so you can say static -> dyn, but not the other way around.
+20. Support for something similar to pack fold expressions. Likely use same format as C++.
+21. Have support for while loops.
+22. Native threading support, where you could declare a separate task by having "async myfunct() {}" meaning it does not run on the main thread whenever called.
+22.An async for a function declaration means that that function, no matter when called, always runs asynchronously. This would be useful for things like toggling pneumatics, or waiting for some condition. You could also call a function with async myfunct(args), which would take whatever function it is, regardless of wether it is a async type or not, and run it on a separate thread, temporarily giving that function the regular async treatment.
+22.a.a Suppose the function async uses const arguments, what happens when the main loop continues and changes one of those variables right in the middle of execution of the other one? Well this would likely happen during an assembly argument. So technically, the function still works exactly as intended. Think of this analogy as reading a sensor's data. It updates in realtime, meaning it's entirely up to the user to address that issue.
+22.b Await would be handled somewhat similar to a class, so you could say async my_thread{some_function(with_its_args)}, then later, say await(something), which would be await(my_thread.isfinished).
+23. For the use of my_thread.isfinished as seen above, you could declare it as a conditional statement, where you say bool isfinished = condition(thread.activity) (when any int/float is if'd, then return false if there's no == 0). This is an example. Meaning that there are now two ways to do this depending on exactly what you want. isfinished() would be a regular C++ function call to a bool funct, but isfinished would refer to that bool. You could also pass arguments to a condition using bool isfinished(x,y) = condition(if x and y), treating isfinished as a function.
+17.0.v1 Addressing ambiguity: Suppose that a function has a type const, but then calls another function within that function that does not take the argument as const. Well the secret is that the main function does actually make it's own copy of sorts of the original, but of type const, meaning that it cannot be pushed into a function that does not take it as const. You'd have to say dyn my_var = const_var, then pass my_var as the function.
+17.0.v2 To address this issue, you can also pass in constructor arguments which work in reverse to a regular constructor. You declare them within the arguments section using @const_var in place of my_var, so no need to create a temporary variable. This would create the function's own copy of that variable, regardless of the originals. (Is this less or more complicated than regular c++ pointers? idk.)
+24. Resolving static vs non-static: Basically, if a static list appends a dyn, then the compiler will let it happen since it could rely on some instantaneous value. However, if you have a list of ints and try to add a string, then it provokes a soft crash.
+25. Human understandable compiler errors. Basically, just say like "<this> tried to <interaction> with <that>, which <error> @file:function:line:col." As a basic example.
+26. Compiler optimizations where they can be done. A for loop with no other arguments should just increment by the for loop counter. Should also happen to a piece of data if the outcome can be predicted with full accuracy. Could represent itself as the list of ifs and possible outcomes of compiler simplifications based on the arguments.
+27. Error handling should be done using the result error Rust implements, although in a better format.
+28. Allow for end of line statements like in C++ using ;, essentially the exact way Python implements it.
+29. When importing other files, automatically go through and rip out everything x object could ever possibly use, and ditch the rest.
+30. If my sanity makes it to #30, implement native support for linking .py and .h files. Mainly .h
+31. Add a special compilation option that attempts to add comments from the original code into the ASM, as well as some comments giving hints about what the compiler actually did.

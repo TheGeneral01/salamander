@@ -1,0 +1,13 @@
+For our parser, we need to establish a few rules regarding the syntax that SAL will follow.
+
+We can write this using BNF expressions. (Backus–Naur form)
+
+
+function_declaration ::= "def" IDENTIFIER "(" parameter_list? ")" ":" block
+
+parameter_list       ::= parameter ("," parameter)*
+parameter            ::= data_type IDENTIFIER
+
+data_type            ::= "dyn" | "local" | "const"
+block                ::= statement | "{" statement* "}"
+

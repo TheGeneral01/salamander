@@ -1,0 +1,78 @@
+# ==========================================
+# SAL Reference Architecture Test File
+# ==========================================
+
+struct Point3D {
+    float x;
+    float y;
+    float z;
+}
+
+struct Engine {
+    Point3D location;
+    dyn speed;
+}
+
+2 ! 1/3 # This discontinuity is settled due to the / operator taking in two different values.
+
+dyn smthn = !/9
+
+# Global variable allocation tracking
+dyn global_counter = 0
+const max_limit = 100
+
+def void compute_system_delta(Engine target, float step):
+    dyn modifier = 12.54
+
+    # Mathematical priority verification loop
+    dyn result = (target.location.x + target.speed) * modifier / 5 - 10
+    
+    if result >= max_limit or result == 0.0:
+        target.speed = 0.0
+    else:
+        target.speed = result + step
+        
+    global_counter = global_counter + 1
+
+def int run_simulation(dyn initial_cycles):
+    local current_run = 0
+    
+    # Initialize our dynamic custom struct
+    Engine sim_engine
+    sim_engine.location.x = 0.5
+    sim_engine.location.y = -1.2
+    sim_engine.location.z = 100.0
+    sim_engine.speed = 55
+    
+    while current_run < initial_cycles:
+        if sim_engine.speed == 0.0:
+            println("Simulation halted: Engine dead locked.")
+            break
+            
+        compute_system_delta(sim_engine, 0.001)
+        current_run = current_run + 1
+        
+    return current_run
+
+def __init__():
+    println("Initializing SAL Runtime Environment...")
+    
+    dyn multiline_test = "This is a complex 
+string literal that drifts down
+multiple lines in the raw text file."
+    
+    local loops_completed = run_simulation(10)
+    
+    println("Execution completed successfully.")
+
+# Reconstructed file in tokens:
+#[T_DEF][T_VOID][T_IDENTIFIER][T_LPAREN][T_RPAREN][T_LBRACE][T_RBRACE]
+
+#[T_DYN][T_IDENTIFIER]
+#[T_DEF][T_IDENTIFIER][T_LPAREN][T_DYN][T_IDENTIFIER][T_COMMA][T_DYN][T_IDENTIFIER][T_RPAREN][T_COLON]
+#[T_DYN][T_IDENTIFIER][T_ASSIGN][T_IDENTIFIER][T_ADD][T_IDENTIFIER]
+#[T_IDENTIFIER][T_ASSIGN][T_IDENTIFIER]
+
+#[T_DEF][T_INIT][T_LPAREN][T_RPAREN][T_COLON]
+#[T_IDENTIFIER][T_LPAREN][T_STRING_LITERAL][T_RPAREN]
+#[T_IDENTIFIER][T_INT_LITERAL][T_INT_LITERAL]

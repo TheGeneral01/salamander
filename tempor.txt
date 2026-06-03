@@ -1,0 +1,73 @@
+std::vector<std::pair<std::string, std::string>> SAL_DEFAULT_OPERATORS = {
+    {"NOT_EQUAL","!="}, // TODO
+    {"ROOT", "!/"}, // TODO
+    {"POWER", "!"}, // TODO
+    {"MULT_ASSIGN", "*="}, // TODO
+    {"ADD_ASSIGN", "+="}, // TODO
+    {"SUB_ASSIGN", "-="}, // TODO
+    {"LESS_EQUAL", "=<"}, // TODO
+    {"GREATER_EQUAL", ">="}, // TODO
+    {"ABS", "||"}, // TODO
+    {"DIV", "/"}, // TODO
+    {"MULT", "*"}, // TODO
+    {"ADD", "+"}, // TODO
+    {"SUB", "-"}, // TODO
+    {"ASSIGN", "="}, // TODO
+    {"LESS", "<"}, // TODO
+    {"GREATER", ">"}, // TODO
+    {"DESTRUCT", "~"} // TODO
+};
+
+std::vector<std::pair<std::string, std::string>> SAL_DEFAULT_DELIMITERS = {
+    {"SCOLON", ";"}, // TODO
+    {"LPAREN", "("}, // TODO
+    {"RPAREN", ")"}, // TODO
+    {"LBRACE", "{"}, // TODO
+    {"RBRACE", "}"}, // TODO
+    {"LBRACKET", "["}, // TODO
+    {"RBRACKET", "]"}, // TODO
+    {"COLON", ":"}, // TODO
+    {"COMMA", ","}, // TODO
+    {"DOT", "."}, // TODO
+    {"AT", "@"}, // TODO
+    {"BAR", "|"} // TODO
+};
+
+std::vector<std::string> SAL_DEFAULT_IDENTIFIERS = {
+    "__asm__", // TODO
+    "__init__", // TODO
+    "__py__", // TODO
+    "link", // TODO
+    "typeof"
+};
+
+std::vector<std::string> SAL_DEFAULT_KEYWORDS = {
+    "active", // TODO
+    "and", // TODO
+    "async", // TODO
+    "break", // TODO
+    "class", // TODO
+    "const", // TODO
+    "continue", // TODO
+    "def", // TODO
+    "dyn", // TODO
+    "except", // TODO
+    "false", // TODO
+    "finally", // TODO
+    "float", // TODO
+    "for", // TODO
+    "int", // TODO
+    "local", // TODO
+    "namespace", // TODO
+    "not", // TODO
+    "or", // TODO
+    "override", // TODO
+    "raise", // TODO
+    "self", // TODO
+    "static", // TODO
+    "struct", // TODO
+    "true", // TODO
+    "try", // TODO
+    "type", // TODO
+    "while" // TODO
+};
