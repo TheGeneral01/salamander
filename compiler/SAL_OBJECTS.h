@@ -250,7 +250,7 @@ const int largest_operator_size = 2; // The size of the largest operator, so the
 // So + = 1, but ++ = 2. Pretty straightforward.
 // Operators like "or", "and", or even "concatenate" should be separated by spaces. This is mostly for expressions.
 
-// Allows us to stort quickly based on the index.
+// Allows us to sort quickly based on the index.
 // TODO: Hardcode this for memory efficiency (or check if the C++ compiler already does that.)
 const std::vector<std::vector<std::pair<std::string, token_types>>> lists_by_size = {
     SAL_ONE_CHAR_OBJECTS,
