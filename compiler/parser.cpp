@@ -1,5 +1,6 @@
 #include "parser.h"
 #include <string>
+#include <memory>
 
 /*
 The parser will need to do a few things:
@@ -90,7 +91,7 @@ class RH_operator : create_AST {
 
     }
     SAL_TOKEN get_content() const override {
-        
+
     }
 
     private:
