@@ -8,46 +8,7 @@
 #include <string>
 #include <cassert>
 
-// experimental:
 
-
-
-/**
- * @brief Checks if a string is a delimiter.
- * @param inpit_text The text to be checked.
- */
-bool is_delimiter(std::string_view input_text) {
-    for (auto item : SAL_DELIMITERS) {
-        if (item.first == input_text) {
-            return true;
-        }
-    }
-    return false; // Returns false otherwise.
-}
-
-/**
- * @brief Checks if a string is an operator.
- * @param input_text The text to be checked.
- */
-bool is_operator(std::string_view input_text) {
-    for (auto item : SAL_OPERATORS) {
-        if (item.first == input_text) {
-            return true;
-        }
-    }
-    return false; // Returns false otherwise.
-}
-
-bool is_operator_or_delimiter(std::string_view input_text) {
-    if (is_operator(input_text) || is_delimiter(input_text)) {return true;}
-    return false; // Return false otherwise.
-}
-
-bool is_operator_or_delimiter(std::string_view input_text, std::string exclude) {
-    if (input_text == exclude) {return false;} // We found the excluded thing, so pass over it.
-    if (is_operator(input_text) || is_delimiter(input_text)) {return true;}
-    return false; // Return false otherwise.
-}
 
 bool has_content(std::string_view input_text, char exclude) {
     for (auto item : input_text) {

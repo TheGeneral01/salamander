@@ -11,36 +11,90 @@ Our rules can be defined as a series of classes, which
 
 */
 
-// A node can only have two different values that it pulls from. It can either be yet another node, or actual data.
-// So all we need to do is combine those two data points into a single value, usually through a mathematical operation.
-// The problem is if we call get_node_value, what should it return from this node?
-struct SAL_AST_NODE {
-    SAL_AST_NODE* left_node;
-    SAL_AST_NODE* right_node;
-    // Now, we have to figure out how we should store our data, essentially, what is the univeral format?
-    // Well we already have the tokens so just use those.
-    
-    // This lets us represent the data as a tree of tokens, where their data can be accessed.
-    // The AST is built by parsing all the tokens into a flattened list.
-};
+// Okay, so I'm going to try to implement a custom AST structure.
+// Don't know how well it's going to work, but guess it's time to find out.
 
-// There are two main types of tokens, one with operators x op y, and just op y.
-// We can say NUL for op y, since it expects nothing to the left
-// And LED (left denotation) for X op Y.
-
-void nul_op() { // Right hand only operator
-
+bool is_type(token_types input_type) {
+    switch(input_type) {
+        case T_DYN:      return true;
+        case T_BOOL:     return true;
+        case T_INT_LITERAL: return true;
+        case T_FLOAT_LITERAL: return true;
+        case T_STRING_LITERAL: return true;
+        case T_VOID: return true;
+        case T_ASYNC: return true;
+        case T_LOCAL: return true;
+        default: return false;
+    }
 }
 
-void left_op() { // Both right and left hand operators.
+class create_AST {
+    public:
+    virtual SAL_TOKEN get_content() const = 0;
+    std::vector<std::unique_ptr<create_AST>> build_AST(std::vector<SAL_TOKEN> input_tokens) {
+        // Take all the AST nodes and push them together into one large list.
+        int cursor = 0;
+        while(cursor < input_tokens.size()) {
+            auto& cur_token = input_tokens[cursor];
+            if (cur_token.token_type == token_types::T_IDENTIFIER) {
+                // Skip over it for now, since this is likely for an operator or something.
+                goto end_AST_node;
+            }
+            if (is_type(cur_token.token_type)) {
+                std::vector<SAL_TOKEN> identifying_tokens;
+                while(is_type(cur_token.token_type) && cursor < input_tokens.size()) {
+                    identifying_tokens.push_back(cur_token);
+                    goto end_AST_node;
+                }
+            }
+            if (is_operator(cur_token.token_type)) {
+                // We have to first check if it's a one or two sided operator. Theres fewer one sided operators so we can just if else that.
+                if (
+                    cur_token.token_type == token_types::T_DESTRUCT ||
+                    cur_token.token_type == token_types::T_SUB_ONE ||
+                    cur_token.token_type == token_types::T_ADD_ONE ||
+                    cur_token.token_type == token_types::T_ROOT
+                ) {
 
-}
+                } else {
 
-class declarations {
-    virtual void get_function() const = 0;
+                }
+            }
+
+            end_AST_node:
+            cursor++;
+        }
+    }
+    protected:
+    int current_token;
+    std::vector<SAL_TOKEN> flat_token_list;
+    std::vector<create_AST*> AST_NODES;
+    SAL_TOKEN peek() {return flat_token_list[current_token+1];}
+    SAL_TOKEN current() {return flat_token_list[current_token];}
+    private:
 };
-class function : declarations {
-    
+class function_declaration : create_AST {
+    public:
+    function_declaration() {
+
+    }
+    SAL_TOKEN get_content() const override {
+
+    }
+    private:
+    std::vector<std::unique_ptr<create_AST*>> sub_nodes;
+};
+class RH_operator : create_AST {
+    public:
+    RH_operator() {
+
+    }
+    SAL_TOKEN get_content() const override {
+        
+    }
+
+    private:
+
 };
 
 
@@ -92,24 +146,7 @@ void pratt_parse(SAL_FILE input_file) {
 
     print_tokens(flattened_lexed_file);
 
-    // Now that our file is flattened into a vector, we can begin parsing it using our rules.
-    while(0 < flattened_lexed_file.size()) {
-        auto& cur_token = flattened_lexed_file[parser_cursor];
-        // Now we need to determine what kind of expressions to do based on the current token we are on.
-        // These typically revolve around things like operators (+, -, *, etc...) or declarations (like def myfunct, etc...)
-        // First, lets check for declarations.
-        // We can make the return of all functions, convienently, by how much to move the cursor.
-        if (cur_token.token_type == token_types::T_DYN) {
-            // Expect a declaration, now figure out if its a function or object.
-            // So we keep going until we find a keyword, which determines if it's a function declaration or a regular object declaration.
-            while(flattened_lexed_file[parser_cursor].token_type != token_types::T_LPAREN) {
-                if (flattened_lexed_file[parser_cursor].token_type == token_types::T_NEWLINE) {
-                    // We now now it is a declaration and not a function.
-                    // Leaving this as break for now so it can be pushed as a rough build.
-                    break;
-                }
-            }
-        }
-        break;
-    }
+    // Now we can create our main AST object.
+
+    // Now we can start adding content.
 }

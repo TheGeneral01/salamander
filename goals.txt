@@ -9,13 +9,13 @@ Language
 3. It should be able to create static functions like int my_function(some_args) {}, or with Python's style int myfunction(some_args):.
 4. It should be able to create dynamic functions using type dyn, which behaves like a function in Python, and relies on arguments given into it, as well as how functions would behave in Python. 
 5. Constructors like in C++ should use @original_var(argument) somewhere between the function and the definition.
-5.a This means that it should be funct(arg) @ogArg(arg): (Single line only)
+5.a This means that it should be funct(arg) @ogArg(arg):
 5.b For multi-line, funct(arg) @ogArg(arg) {}
 6. For variable creation, it can inherit the same properties as the functions.
 6.a A variable could be called "dyn my_var = x", where it essentially becomes a smart pointer. Or it can mutate to static datatypes like my_var = "123" or my_var = 123 (string vs int).
 6.b Will implement dynamic lists as the default, so standard Python behavior.
 6.c Also allow for static lists, where the item inside must be known.
-7. All data, should be able to inherit the static tag, meaning it cannot leave it's namespace.
+7. All data, should be able to inherit the protected tag, meaning it cannot leave it's namespace.
 7.a Constants can be marked with const, although if it's never changed, the compiler should just mark it as a const in ASM.
 7.b It should have some ability to be able to interface with other languages.
 8. Oh yeah obv it should be able to make ASM from SAL.
@@ -37,7 +37,7 @@ Language
 22.An async for a function declaration means that that function, no matter when called, always runs asynchronously. This would be useful for things like toggling pneumatics, or waiting for some condition. You could also call a function with async myfunct(args), which would take whatever function it is, regardless of wether it is a async type or not, and run it on a separate thread, temporarily giving that function the regular async treatment.
 22.a.a Suppose the function async uses const arguments, what happens when the main loop continues and changes one of those variables right in the middle of execution of the other one? Well this would likely happen during an assembly argument. So technically, the function still works exactly as intended. Think of this analogy as reading a sensor's data. It updates in realtime, meaning it's entirely up to the user to address that issue.
 22.b Await would be handled somewhat similar to a class, so you could say async my_thread{some_function(with_its_args)}, then later, say await(something), which would be await(my_thread.isfinished).
-23. For the use of my_thread.isfinished as seen above, you could declare it as a conditional statement, where you say bool isfinished = condition(thread.activity) (when any int/float is if'd, then return false if there's no == 0). This is an example. Meaning that there are now two ways to do this depending on exactly what you want. isfinished() would be a regular C++ function call to a bool funct, but isfinished would refer to that bool. You could also pass arguments to a condition using bool isfinished(x,y) = condition(if x and y), treating isfinished as a function.
+23. For the use of my_thread.isfinished as seen above, you could declare it as a conditional statement, where you say bool isfinished = condition(thread.active) (when any int/float is if'd, then return false if there's no == 0). This is an example. Meaning that there are now two ways to do this depending on exactly what you want. isfinished() would be a regular C++ function call to a bool funct, but isfinished would refer to that bool. You could also pass arguments to a condition using bool isfinished(x,y) = condition(if x and y), treating isfinished as a function.
 17.0.v1 Addressing ambiguity: Suppose that a function has a type const, but then calls another function within that function that does not take the argument as const. Well the secret is that the main function does actually make it's own copy of sorts of the original, but of type const, meaning that it cannot be pushed into a function that does not take it as const. You'd have to say dyn my_var = const_var, then pass my_var as the function.
 17.0.v2 To address this issue, you can also pass in constructor arguments which work in reverse to a regular constructor. You declare them within the arguments section using @const_var in place of my_var, so no need to create a temporary variable. This would create the function's own copy of that variable, regardless of the originals. (Is this less or more complicated than regular c++ pointers? idk.)
 24. Resolving static vs non-static: Basically, if a static list appends a dyn, then the compiler will let it happen since it could rely on some instantaneous value. However, if you have a list of ints and try to add a string, then it provokes a soft crash.
