@@ -92,6 +92,7 @@ enum token_types {
 
     // Parser token things, not actually represented in the file.
     T_NEWLINE, // To separate statements
+    T_ERROR,
 };
 
 struct SAL_TOKEN {

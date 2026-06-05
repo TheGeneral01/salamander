@@ -31,19 +31,31 @@ bool is_type(token_types input_type) {
 
 class create_AST {
     public:
-    virtual SAL_TOKEN get_content() const = 0;
-    std::vector<std::unique_ptr<create_AST>> build_AST(std::vector<SAL_TOKEN> input_tokens) {
+    virtual std::vector<SAL_TOKEN> get_content() const = 0;
+};
+class parse_AST : public create_AST {
+    public:
+    std::vector<SAL_TOKEN> get_content() const override {}
+
+    std::vector<std::unique_ptr<create_AST>> build_AST(SAL_FILE input_file) {
         // Take all the AST nodes and push them together into one large list.
-        int cursor = 0;
-        while(cursor < input_tokens.size()) {
-            auto& cur_token = input_tokens[cursor];
+        while(cursor < input_file.tokens.size()) {
+            auto& cur_token = input_file.tokens[cursor];
             if (cur_token.token_type == token_types::T_IDENTIFIER) {
                 // Skip over it for now, since this is likely for an operator or something.
                 goto end_AST_node;
             }
+            if (cur_token.token_type == token_types::T_LINK) {
+                // Now we have to link the file. The only following argument can be an identifier, otherwise throw an error.
+                if (peek().token_type != token_types::T_IDENTIFIER) {
+                    std::cout << "Expected a file identifier for link statement. @" << input_file.filename << ":" << cur_token.line << ":" << cur_token.col;
+                }
+                // Now we have to create an entirely new file.
+                
+            }
             if (is_type(cur_token.token_type)) {
                 std::vector<SAL_TOKEN> identifying_tokens;
-                while(is_type(cur_token.token_type) && cursor < input_tokens.size()) {
+                while(is_type(cur_token.token_type) && cursor < input_file.tokens.size()) {
                     identifying_tokens.push_back(cur_token);
                     goto end_AST_node;
                 }
@@ -56,10 +68,13 @@ class create_AST {
                     cur_token.token_type == token_types::T_ADD_ONE ||
                     cur_token.token_type == token_types::T_ROOT
                 ) {
-
+                    // Must be a RH operator.
+                    RH_operator new_RH_operator(cur_token, peek()); // Create a new RH operator.
                 } else {
-
+                    // Now we know it's a NUL operator (which I forgot what it stands for but its like X + Y or whatever.)
+                    NUL_operator new_NUL_operator(prev(), current(), peek());
                 }
+                goto end_AST_node;
             }
 
             end_AST_node:
@@ -67,37 +82,63 @@ class create_AST {
         }
     }
     protected:
-    int current_token;
+    int cursor;
     std::vector<SAL_TOKEN> flat_token_list;
     std::vector<create_AST*> AST_NODES;
-    SAL_TOKEN peek() {return flat_token_list[current_token+1];}
-    SAL_TOKEN current() {return flat_token_list[current_token];}
+    SAL_TOKEN peek() {return flat_token_list[cursor+1];}
+    SAL_TOKEN current() {return flat_token_list[cursor];}
+    SAL_TOKEN prev() {return flat_token_list[cursor-1];}
     private:
 };
-class function_declaration : create_AST {
+
+class function_declaration : public create_AST {
     public:
+    /**
+     * @brief Creates a
+     */
     function_declaration() {
 
     }
-    SAL_TOKEN get_content() const override {
+    std::vector<SAL_TOKEN> get_content() const override {
 
     }
     private:
     std::vector<std::unique_ptr<create_AST*>> sub_nodes;
 };
-class RH_operator : create_AST {
+class declaration : public create_AST {
     public:
-    RH_operator() {
-
-    }
-    SAL_TOKEN get_content() const override {
+    std::vector<SAL_TOKEN> get_content() const override {}
+    declaration(std::vector<SAL_TOKEN> type_tokens, SAL_TOKEN ) {}
+    private:
+};
+class RH_operator : public create_AST { // Operator for functions like !/, ++, etc...
+    public:
+    /**
+     * @brief Creates an operator function with the operator's function token, like !/, ++, etc...
+     */
+    RH_operator(SAL_TOKEN in_operator_function, SAL_TOKEN in_value) {operator_function = in_operator_function; value = in_value;}
+    std::vector<SAL_TOKEN> get_content() const override {
 
     }
 
     private:
-
+    SAL_TOKEN operator_function;
+    SAL_TOKEN value;
 };
 
+class NUL_operator : public create_AST { // Operator for functions like !, +, etc...
+    public:
+    std::vector<SAL_TOKEN> get_content() const override {
+
+    }
+    NUL_operator(SAL_TOKEN first_value, SAL_TOKEN operator_function, SAL_TOKEN second_value) 
+    : operator_funct(operator_function),first_val(first_value),second_val(second_value) {}
+
+    private:
+    SAL_TOKEN operator_funct;
+    SAL_TOKEN first_val;
+    SAL_TOKEN second_val;
+};
 
 void pratt_parse(SAL_FILE input_file) {
     // From here, we can use the lexed_file vector to navigate our file.
@@ -146,6 +187,12 @@ void pratt_parse(SAL_FILE input_file) {
     }
 
     print_tokens(flattened_lexed_file);
+    // Add our tokens.
+    input_file.tokens = flattened_lexed_file;
+    // Now start parsing the file.
+    parse_AST new_AST;
+    new_AST.build_AST(input_file);
+
 
     // Now we can create our main AST object.
 
