@@ -1,6 +1,7 @@
 3 + 6 * 90
 
-def __init__() :
-    dyn x = 2
-
-    dyn y = 3
+#def __init__() :
+#    dyn x = 2
+#
+#    dyn y = 3
+#

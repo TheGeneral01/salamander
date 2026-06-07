@@ -29,9 +29,81 @@ bool is_type(token_types input_type) {
     }
 }
 
+bool is_expression(std::vector<SAL_TOKEN> input_tokens) { // If a list of data is an expression.
+
+}
+
+bool is_binary_operator() {
+
+}
+
+bool is_unary_operator() {
+
+}
+
 class create_AST {
     public:
     virtual std::vector<SAL_TOKEN> get_content() const = 0;
+};
+
+class function_declaration : public create_AST {
+    public:
+    /**
+     * @brief Creates a
+     */
+    function_declaration() {
+
+    }
+    std::vector<SAL_TOKEN> get_content() const override {
+
+    }
+    private:
+    std::vector<std::unique_ptr<create_AST*>> sub_nodes;
+};
+class declaration : public create_AST {
+    public:
+    std::vector<SAL_TOKEN> get_content() const override {}
+    declaration(std::vector<SAL_TOKEN> type_tokens, SAL_TOKEN ) {}
+    private:
+};
+class unary_operator : public create_AST { // Operator for functions like !/, ++, etc...
+    public:
+    /**
+     * @brief Creates an operator function with the operator's function token, like !/, ++, etc...
+     */
+    unary_operator(SAL_TOKEN in_operator_function, SAL_TOKEN in_value) {operator_function = in_operator_function; value = in_value;}
+    std::vector<SAL_TOKEN> get_content() const override {
+
+    }
+
+    private:
+    SAL_TOKEN operator_function;
+    SAL_TOKEN value;
+};
+
+class binary_operator : public create_AST { // Operator for functions like !, +, etc...
+    public:
+    std::vector<SAL_TOKEN> get_content() const override {
+
+    }
+    binary_operator(SAL_TOKEN first_value, SAL_TOKEN operator_function, SAL_TOKEN second_value) 
+    : operator_funct(operator_function),first_val(first_value),second_val(second_value) {}
+
+    private:
+    SAL_TOKEN operator_funct;
+    SAL_TOKEN first_val;
+    SAL_TOKEN second_val;
+};
+class expression : public create_AST {
+    public:
+    std::vector<SAL_TOKEN> get_content() const override  {
+        
+    }
+    expression(std::vector<SAL_TOKEN> input_tokens) {
+
+    }
+    private:
+    std::vector<create_AST*> AST_nodes;
 };
 class parse_AST : public create_AST {
     public:
@@ -59,21 +131,17 @@ class parse_AST : public create_AST {
                     identifying_tokens.push_back(cur_token);
                     goto end_AST_node;
                 }
+                // Now we have to figure out is this an identifier or a function?
+
             }
             if (is_operator(cur_token.token_type)) {
-                // We have to first check if it's a one or two sided operator. Theres fewer one sided operators so we can just if else that.
-                if (
-                    cur_token.token_type == token_types::T_DESTRUCT ||
-                    cur_token.token_type == token_types::T_SUB_ONE ||
-                    cur_token.token_type == token_types::T_ADD_ONE ||
-                    cur_token.token_type == token_types::T_ROOT
-                ) {
-                    // Must be a RH operator.
-                    RH_operator new_RH_operator(cur_token, peek()); // Create a new RH operator.
-                } else {
-                    // Now we know it's a NUL operator (which I forgot what it stands for but its like X + Y or whatever.)
-                    NUL_operator new_NUL_operator(prev(), current(), peek());
+                // Now we have to collect all of the tokens within this expression.
+                std::vector<SAL_TOKEN> expression_operators;
+                while(is_expression(expression_operators)) {
+                    expression_operators.push_back(cur_token);
+                    cursor++;
                 }
+                expression new_expression();
                 goto end_AST_node;
             }
 
@@ -89,55 +157,6 @@ class parse_AST : public create_AST {
     SAL_TOKEN current() {return flat_token_list[cursor];}
     SAL_TOKEN prev() {return flat_token_list[cursor-1];}
     private:
-};
-
-class function_declaration : public create_AST {
-    public:
-    /**
-     * @brief Creates a
-     */
-    function_declaration() {
-
-    }
-    std::vector<SAL_TOKEN> get_content() const override {
-
-    }
-    private:
-    std::vector<std::unique_ptr<create_AST*>> sub_nodes;
-};
-class declaration : public create_AST {
-    public:
-    std::vector<SAL_TOKEN> get_content() const override {}
-    declaration(std::vector<SAL_TOKEN> type_tokens, SAL_TOKEN ) {}
-    private:
-};
-class RH_operator : public create_AST { // Operator for functions like !/, ++, etc...
-    public:
-    /**
-     * @brief Creates an operator function with the operator's function token, like !/, ++, etc...
-     */
-    RH_operator(SAL_TOKEN in_operator_function, SAL_TOKEN in_value) {operator_function = in_operator_function; value = in_value;}
-    std::vector<SAL_TOKEN> get_content() const override {
-
-    }
-
-    private:
-    SAL_TOKEN operator_function;
-    SAL_TOKEN value;
-};
-
-class NUL_operator : public create_AST { // Operator for functions like !, +, etc...
-    public:
-    std::vector<SAL_TOKEN> get_content() const override {
-
-    }
-    NUL_operator(SAL_TOKEN first_value, SAL_TOKEN operator_function, SAL_TOKEN second_value) 
-    : operator_funct(operator_function),first_val(first_value),second_val(second_value) {}
-
-    private:
-    SAL_TOKEN operator_funct;
-    SAL_TOKEN first_val;
-    SAL_TOKEN second_val;
 };
 
 void pratt_parse(SAL_FILE input_file) {
