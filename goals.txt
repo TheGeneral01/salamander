@@ -57,9 +57,3 @@ ASM output is no longer a priority.
 Utilizing C++ as an intermediate language for LLVM optimization appears to remain an effective and simple plan
 for compilation. Let's talk about the scope checker and the codegen, since I'm on a deadline for College apps and
 I need to get this thing done with Vulkan.
-
-Scope checker:
-- We need to be able to first glance over the file lightly, without confirming that anything really exists.
-- This way, we can say checkScope(callingObject, baseObject) for each object to ensure that the proper scope
-    actually exists, as well as for the codegen to be able to differ between the :: it would have from file
-    inclusion, and the 
