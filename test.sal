@@ -1,0 +1,34 @@
+class Sample:
+    int value = 4
+
+def dyn choose_value(bool use_integer, dyn source):
+    int adjustment = 3
+    dyn prepared = source
+    prepared = prepared + adjustment
+
+    if use_integer:
+        int scaled_integer = adjustment * 2
+        return prepared + scaled_integer
+    else:
+        float scaled_float = adjustment / 2.0
+        return prepared + scaled_float
+
+def dyn normalize(dyn input_value):
+    int offset = 1
+    dyn intermediate = input_value
+    intermediate = intermediate + offset
+    return intermediate
+
+Sample first = Sample()
+Sample second = Sample()
+bool equal_samples = first == second
+
+dyn numeric_value = 5
+numeric_value = 2.5
+dyn selected_value = choose_value(true, numeric_value)
+dyn normalized_value = normalize(selected_value)
+
+if equal_samples:
+    print(normalized_value)
+else:
+    print(numeric_value)
