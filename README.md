@@ -1,5 +1,8 @@
 ## Welcome to Salamander!
 
+## Current Status of Code:
+Non-Functional. Interpreter is the next main task.
+
 ### What is Salamander?
 Salamander is a programming language designed to leverage the often ignored and underutilized GPU in while loops, and parallel tasks. By using Vulkan as a back-end, all types of GPUs are supported,
 from Nvidia, AMD, integrated graphics, and all other Vulkan-Compatible GPUs. It offers dynamic variable support through a type called dyn, which is broken down into static code during compilation.
