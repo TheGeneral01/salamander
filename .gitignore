@@ -3,3 +3,9 @@ goals.txt
 /.vscode
 test.sal.ast.txt
 sal
+SalRuntime
+*.o
+*.d
+makefile
+/.kilo
+.zshrc

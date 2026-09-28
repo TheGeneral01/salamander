@@ -14,7 +14,7 @@
 #include "utils/printTkn.h"
 #include <vector>
 #include <string>
-#include <SALItms.h>
+#include "SALItms.h"
 #include <unordered_map>
 #include <fstream>
 #include <filesystem>
@@ -89,6 +89,107 @@ class lexer {
         if (isStr(text)) {col += text.size(); return true;}
         return false;
     }
+
+    /**
+     * @brief Captures the optional `(inputs | outputs)` clause of a cpp block.
+     * @details The clause is re-lexed into standalone tokens so the parser can read it. Returns true
+     *          when there is no clause at all, which keeps plain `cpp { ... }` working unchanged.
+     */
+    bool captureCppSignature(std::vector<SALTKN>& signature) {
+        while (!EOL() && std::isspace(static_cast<unsigned char>(curChar()))) nxtChar();
+        if (EOL() || !isChar('(')) return true;
+
+        std::string raw;
+        std::size_t depth = 0;
+        bool escaped = false;
+        char quote = '\0';
+        while (true) {
+            if (EoF() || EOL()) throw std::runtime_error("Unterminated cpp block signature");
+            const char current = curChar();
+            raw += current;
+            if (quote != '\0') {
+                if (escaped) escaped = false;
+                else if (current == '\\') escaped = true;
+                else if (current == quote) quote = '\0';
+            } else if (current == '"' || current == '\'') {
+                quote = current;
+            } else if (current == '(') {
+                ++depth;
+            } else if (current == ')') {
+                --depth;
+                if (depth == 0) {
+                    nxtChar();
+                    break;
+                }
+            }
+            nxtChar();
+        }
+
+        const std::string inner = raw.size() >= 2 ? raw.substr(1, raw.size() - 2) : std::string{};
+        lexer nested;
+        signature = nested.lexString(inner);
+        return true;
+    }
+
+    bool captureCppBlock(std::string& source) {
+        while (!EOL() && std::isspace(static_cast<unsigned char>(curChar()))) nxtChar();
+        if (EOL() || !isChar('{')) return false;
+        nxtChar();
+
+        enum class State { CODE, STRING, CHARACTER, LINE_COMMENT, BLOCK_COMMENT };
+        State state = State::CODE;
+        bool escaped = false;
+        std::size_t depth = 1;
+        while (depth != 0) {
+            if (EoF()) throw std::runtime_error("Unterminated cpp block");
+            if (EOL()) {
+                dingLine();
+                source += '\n';
+                if (state == State::LINE_COMMENT) state = State::CODE;
+                continue;
+            }
+
+            const char current = curChar();
+            const char next = getNxtChar();
+            if (state == State::CODE) {
+                if (current == '"') state = State::STRING;
+                else if (current == '\'') state = State::CHARACTER;
+                else if (current == '/' && next == '/') state = State::LINE_COMMENT;
+                else if (current == '/' && next == '*') state = State::BLOCK_COMMENT;
+                else if (current == '{') ++depth;
+                else if (current == '}') {
+                    --depth;
+                    if (depth == 0) {
+                        nxtChar();
+                        return true;
+                    }
+                }
+            } else if (state == State::STRING || state == State::CHARACTER) {
+                if (escaped) escaped = false;
+                else if (current == '\\') escaped = true;
+                else if ((state == State::STRING && current == '"') ||
+                         (state == State::CHARACTER && current == '\'')) state = State::CODE;
+            } else if (state == State::LINE_COMMENT) {
+                if (current == '\n') state = State::CODE;
+            } else if (state == State::BLOCK_COMMENT && current == '*' && next == '/') {
+                source += "*/";
+                nxtChar();
+                nxtChar();
+                continue;
+            }
+
+            source += current;
+            const std::size_t previousLine = line;
+            nxtChar();
+            if (line != previousLine) source += '\n';
+            if (current == '/' && (state == State::LINE_COMMENT || state == State::BLOCK_COMMENT)) {
+                source += next;
+                nxtChar();
+            }
+        }
+        return true;
+    }
+
     int indentCtr = 0;
 
     /**
@@ -128,7 +229,13 @@ class lexer {
 
             // First move past whitespace.
             while (!chk() && std::isspace(static_cast<unsigned char>(curChar()))) nxtChar();
-            if (isChar('#')) dingLine(); // Skips everything else from this line and moves on.
+            if (isChar('#')) {
+                // A comment runs to the end of its line. Restart the loop so the following line goes
+                // through the same indentation and comment handling as any other line; without this,
+                // two comment lines in a row would tokenize the second one's '#' as code.
+                dingLine();
+                continue;
+            }
             if (chk()) continue; // Skip back to the beginning of this while loop and move on.
             int tokenLine = line;
             int tokenCol = col;
@@ -198,6 +305,18 @@ class lexer {
                     }
                 }
             }
+            if (txt == "cpp") {
+                std::vector<SALTKN> signature;
+                if (captureCppSignature(signature)) {
+                    std::string source;
+                    if (captureCppBlock(source)) {
+                        SALTKN blockToken = makeToken(CPPBLOCK, std::move(source), tokenLine, tokenCol);
+                        blockToken.subTkns = std::move(signature);
+                        tokens.push_back(std::move(blockToken));
+                        continue;
+                    }
+                }
+            }
             if (!txt.empty() && !isKeyword) {
                 // Must be an identifier if it was not a keyword.
                 tokens.push_back(makeToken(IDENTIFIER, txt, tokenLine, tokenCol, txt.length()));
@@ -225,10 +344,29 @@ class lexer {
     void makeString() {
         int tokenLine = line;
         int tokenCol = col;
-        auto lookForStrChar = nxtChar(); // We start off on the ", so skip that. Make note of what to look for though.
-        std::string collectedStr = "";
-        while(curChar() != lookForStrChar) collectedStr += nxtChar();
-        nxtChar(); // Skip the ending ' or "
+        const char delimiter = nxtChar();
+        std::string collectedStr;
+        while (!EoF() && !EOL() && curChar() != delimiter) {
+            char current = nxtChar();
+            if (current != '\\') {
+                collectedStr += current;
+                continue;
+            }
+            if (EoF() || EOL()) throw std::runtime_error("Unterminated escape in string literal");
+            const char escaped = nxtChar();
+            switch (escaped) {
+                case 'n': collectedStr += '\n'; break;
+                case 'r': collectedStr += '\r'; break;
+                case 't': collectedStr += '\t'; break;
+                case '0': collectedStr += '\0'; break;
+                case '\\': collectedStr += '\\'; break;
+                case '\'': collectedStr += '\''; break;
+                case '"': collectedStr += '"'; break;
+                default: throw std::runtime_error(std::string("Unsupported string escape: \\") + escaped);
+            }
+        }
+        if (EoF() || EOL()) throw std::runtime_error("Unterminated string literal");
+        nxtChar();
         tokens.push_back(makeToken(STRLIT, collectedStr, tokenLine, tokenCol, collectedStr.size()));
     }
 

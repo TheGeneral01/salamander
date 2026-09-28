@@ -89,6 +89,24 @@ struct ImportStmt : Stmt {
     SALTKN alias;
 };
 
+/** A single `type name` entry in a cpp block signature. */
+struct CppBlockParam {
+    SALTKN type;
+    SALTKN name;
+};
+
+/**
+ * @brief A `cpp { ... }` block, optionally bound to SAL variables.
+ * @details `cpp(int n, list values | int total) { ... }` declares two inputs before the `|` and one
+ *          output after it. Each declared variable is materialised as a C++ local of a matching type
+ *          and every output is written back into the SAL scope when the block finishes.
+ */
+struct CppBlockStmt : Stmt {
+    std::string source;
+    std::vector<CppBlockParam> inputs;
+    std::vector<CppBlockParam> outputs;
+};
+
 struct BreakStmt : Stmt {};
 
 struct ContinueStmt : Stmt {};

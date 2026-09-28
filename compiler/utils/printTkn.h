@@ -15,7 +15,7 @@
 #include <iostream>
 #include <vector>
 #include <string_view>
-#include "SALItms.h"
+#include "../SALItms.h"
 
 inline constexpr std::string_view salTknTypeToString(SalTknType type) {
     switch (type) {
@@ -94,6 +94,7 @@ inline constexpr std::string_view salTknTypeToString(SalTknType type) {
         case SalTknType::CONTINUE:   return "CONTINUE";
         case SalTknType::NAMESPACE:  return "NAMESPACE";
         case SalTknType::NEWLINE:    return "NEWLINE";
+        case SalTknType::CPPBLOCK:   return "CPPBLOCK";
     }
     return "UNKNOWN";
 }

@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 fs::path globalCompilerPath("");
 
@@ -59,14 +60,38 @@ class compiler {
     std::vector<std::unique_ptr<Stmt>> finalAST;
     Newt interpreter;
 
-    void compile(const fs::path& filepath) {
+    void compile(const fs::path& filepath, const std::vector<std::string>& userArgs) {
+        interpreter.setUserArgs(userArgs);
         file.filepath = filepath;
+        std::vector<std::unique_ptr<Stmt>> parsedAST;
+        std::unordered_set<fs::path> loadedFiles;
 
-        lexer sourceLexer;
-        file.lexedFile = sourceLexer.lexFile(file.filepath);
+        auto loadFile = [&](auto&& self, const fs::path& sourcePath) -> void {
+            const fs::path absolutePath = fs::absolute(sourcePath).lexically_normal();
+            if (!loadedFiles.insert(absolutePath).second) return;
 
-        parser sourceParser(file.lexedFile);
-        auto parsedAST = sourceParser.parse();
+            lexer sourceLexer;
+            auto tokens = sourceLexer.lexFile(absolutePath);
+            if (absolutePath == fs::absolute(filepath).lexically_normal()) {
+                file.lexedFile = tokens;
+            }
+
+            parser sourceParser(tokens);
+            auto fileAST = sourceParser.parse();
+            const auto includeFiles = sourceParser.getIncludeFiles();
+            for (const auto& includeFile : includeFiles) {
+                const fs::path includePath = absolutePath.parent_path() / fs::path(includeFile);
+                if (!fs::exists(includePath)) {
+                    throw std::runtime_error("Cannot import '" + includeFile +
+                                             "': no such SAL file (looked in " +
+                                             includePath.string() + ")");
+                }
+                self(self, includePath);
+            }
+            for (auto& statement : fileAST) parsedAST.push_back(std::move(statement));
+        };
+
+        loadFile(loadFile, filepath);
         if (!checkFileScope(parsedAST)) {
             throw std::runtime_error("File scope validation failed");
         }
@@ -96,9 +121,15 @@ int main(int argc, char* argv[]) {
         throw std::runtime_error("Invalid file provided");
     }
 
+    // Everything after the .sal filename is forwarded verbatim to cpp blocks as command-line args.
+    std::vector<std::string> userArgs;
+    for (int index = 2; index < argc; ++index) {
+        if (argv[index] != nullptr) userArgs.emplace_back(argv[index]);
+    }
+
     try {
         compiler salCompiler;
-        salCompiler.compile(fs::path(filename));
+        salCompiler.compile(fs::path(filename), userArgs);
     } catch (const std::exception& error) {
         std::cerr << "SAL compilation failed: " << error.what() << '\n';
         return 1;

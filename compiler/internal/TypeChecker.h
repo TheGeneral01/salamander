@@ -234,7 +234,8 @@ class TypeChecker {
             if (separator != std::string::npos) {
                 const std::string variantType = variable->name.originalTxt.substr(separator + 1);
                 if (variantType == "int" || variantType == "float" || variantType == "bool" ||
-                    variantType == "string" || classNames.find(variantType) != classNames.end()) return {variantType};
+                    variantType == "string" ||
+                    classNames.find(variantType) != classNames.end()) return {variantType};
             }
             if (classNames.find(variable->name.originalTxt) != classNames.end()) return {variable->name.originalTxt};
             return {};
@@ -504,6 +505,19 @@ class TypeChecker {
 
     static std::unique_ptr<Stmt> cloneStmt(const Stmt* stmt) {
         if (dynamic_cast<const NullStmt*>(stmt)) return std::make_unique<NullStmt>();
+        if (auto* import = dynamic_cast<const ImportStmt*>(stmt)) {
+            auto copy = std::make_unique<ImportStmt>();
+            copy->directory = import->directory;
+            copy->alias = import->alias;
+            return copy;
+        }
+        if (auto* cppBlock = dynamic_cast<const CppBlockStmt*>(stmt)) {
+            auto copy = std::make_unique<CppBlockStmt>();
+            copy->source = cppBlock->source;
+            copy->inputs = cppBlock->inputs;
+            copy->outputs = cppBlock->outputs;
+            return copy;
+        }
         if (dynamic_cast<const BreakStmt*>(stmt)) return std::make_unique<BreakStmt>();
         if (dynamic_cast<const ContinueStmt*>(stmt)) return std::make_unique<ContinueStmt>();
         if (auto* ret = dynamic_cast<const ReturnStmt*>(stmt)) {

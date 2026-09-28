@@ -117,6 +117,13 @@ class parser {
             adv();
             return nullptr;
         }
+        if (chk(CPPBLOCK)) {
+            const SALTKN blockToken = adv();
+            auto block = std::make_unique<CppBlockStmt>();
+            block->source = blockToken.originalTxt;
+            parseCppSignature(blockToken.subTkns, *block);
+            return block;
+        }
 
         std::vector<SALTKN> specs;
         while (!isAtEnd() && isSpec(cur().type)) {
@@ -187,6 +194,37 @@ class parser {
         auto stmt = std::make_unique<ExprStmt>();
         stmt->expr = std::move(expr);
         return stmt;
+    }
+
+    /**
+     * @brief Reads a cpp block's `(inputs | outputs)` clause from its signature tokens.
+     * @details Entries before the `|` are inputs, entries after it are outputs, and each entry is a
+     *          `type name` pair in the same order SAL declares its own variables.
+     */
+    void parseCppSignature(const std::vector<SALTKN>& signature, CppBlockStmt& block) {
+        std::size_t index = 0;
+        bool readingOutputs = false;
+        while (index < signature.size()) {
+            if (signature[index].type == BAR) {
+                readingOutputs = true;
+                ++index;
+                continue;
+            }
+            if (signature[index].type == COMMA) {
+                ++index;
+                continue;
+            }
+            if (index + 1 >= signature.size()) {
+                throw std::runtime_error("Malformed cpp block signature: expected '<type> <name>'");
+            }
+            CppBlockParam param;
+            param.type = signature[index];
+            param.name = signature[index + 1];
+            param.name.type = IDENTIFIER;
+            if (readingOutputs) block.outputs.push_back(std::move(param));
+            else block.inputs.push_back(std::move(param));
+            index += 2;
+        }
     }
 
     std::unique_ptr<ReturnStmt> parseReturnStmt() {
@@ -440,7 +478,9 @@ class parser {
     std::unique_ptr<ImportStmt> parseImportStmt() {
         auto importStatement = std::make_unique<ImportStmt>();
         importStatement->directory.push_back(adv());
-        includedFiles.push_back(std::move(importStatement));
+        auto includeRecord = std::make_unique<ImportStmt>();
+        includeRecord->directory = importStatement->directory;
+        includedFiles.push_back(std::move(includeRecord));
         return importStatement;
     }
 
@@ -547,6 +587,17 @@ class parser {
             for (const auto& part : importStmt->directory) std::cout << " " << part.originalTxt;
             if (!importStmt->alias.originalTxt.empty()) std::cout << " as " << importStmt->alias.originalTxt;
             std::cout << std::endl;
+        } else if (auto cppBlock = dynamic_cast<CppBlockStmt*>(stmt.get())) {
+            std::cout << p << "CppBlock (" << cppBlock->inputs.size() << " in, "
+                      << cppBlock->outputs.size() << " out)" << std::endl;
+            for (const auto& input : cppBlock->inputs) {
+                std::cout << p << "  In: " << input.name.originalTxt
+                          << " (" << input.type.originalTxt << ")" << std::endl;
+            }
+            for (const auto& output : cppBlock->outputs) {
+                std::cout << p << "  Out: " << output.name.originalTxt
+                          << " (" << output.type.originalTxt << ")" << std::endl;
+            }
         } else if (auto v = dynamic_cast<VarDeclStmt*>(stmt.get())) {
             std::cout << p << "VarDecl: " << v->name.originalTxt << " (" << v->type.originalTxt << ")" << std::endl;
             printAttributes(v->attributes, indent + 1);

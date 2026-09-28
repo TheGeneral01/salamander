@@ -11,7 +11,8 @@
 
 #pragma once
 
-#include "astObjs.h"
+#include "../astObjs.h"
+#include "CppBlockRuntime.h"
 #include "stdlib/print.h"
 #include <algorithm>
 #include <cmath>
@@ -32,6 +33,7 @@
 #include <vector>
 
 class Newt {
+    // Object support is intentionally limited to the class name until classes gain fields.
     struct Object {
         std::string className;
     };
@@ -58,6 +60,34 @@ class Newt {
 
     std::unordered_map<std::string, Value> variables;
     std::unordered_map<std::string, const ClassDefStmt*> classes;
+    std::unordered_map<std::string, const FuncDefStmt*> functions;
+    std::unordered_set<std::string> importedModules;
+    CppBlockRuntime cppBlockRuntime;
+    CppBlockRuntime::Prepared cppPrepared;
+    bool cppPreparedReady = false;
+    std::vector<std::string> userArgs;
+
+    void prepareCppBlocks(const std::vector<std::unique_ptr<Stmt>>& ast) {
+        std::vector<std::string> sources;
+        std::vector<bool> bound;
+        for (const auto& statement : ast) {
+            if (auto block = dynamic_cast<const CppBlockStmt*>(statement.get())) {
+                sources.push_back(block->source);
+                bound.push_back(!block->inputs.empty() || !block->outputs.empty());
+            }
+        }
+        if (sources.empty()) return;
+        cppPrepared = cppBlockRuntime.prepare(sources, bound);
+        cppPreparedReady = true;
+    }
+
+    std::string cppBlockId(const CppBlockStmt& block) const {
+        auto found = cppPrepared.blockIds.find(block.source);
+        if (found == cppPrepared.blockIds.end()) {
+            throw std::runtime_error("cpp block was not pre-compiled at startup");
+        }
+        return found->second;
+    }
 
     static std::string typeName(const Value& value) {
         if (std::holds_alternative<int64_t>(value.data)) return "int";
@@ -147,6 +177,43 @@ class Newt {
         if (target == "string" || target == "str") return Value(display(value));
         if (target == "list" && std::holds_alternative<Value::List>(value.data)) return value;
         throw std::runtime_error("Unsupported SAL cast to " + target);
+    }
+
+    /**
+     * @brief Converts an interpreter value into the marshalling form cpp blocks exchange.
+     */
+    static sal::Value toSalValue(const Value& value) {
+        if (auto item = std::get_if<int64_t>(&value.data)) return sal::Value(*item);
+        if (auto item = std::get_if<double>(&value.data)) return sal::Value(*item);
+        if (auto item = std::get_if<bool>(&value.data)) return sal::Value(*item);
+        if (auto item = std::get_if<std::string>(&value.data)) return sal::Value(*item);
+        if (auto item = std::get_if<Value::List>(&value.data)) {
+            std::vector<sal::Value> items;
+            items.reserve(item->size());
+            for (const auto& element : *item) items.push_back(toSalValue(element));
+            return sal::Value(std::move(items));
+        }
+        return sal::Value{};
+    }
+
+    /**
+     * @brief Converts a value a cpp block wrote back into an interpreter value.
+     */
+    static Value fromSalValue(const sal::Value& value) {
+        switch (value.kind) {
+            case sal::Value::Kind::Int: return Value(static_cast<int64_t>(value.integer));
+            case sal::Value::Kind::Float: return Value(value.floating);
+            case sal::Value::Kind::Bool: return Value(value.boolean);
+            case sal::Value::Kind::String: return Value(value.text);
+            case sal::Value::Kind::List: {
+                Value::List items;
+                items.reserve(value.items.size());
+                for (const auto& element : value.items) items.push_back(fromSalValue(element));
+                return Value(std::move(items));
+            }
+            case sal::Value::Kind::Null: return Value{};
+        }
+        return Value{};
     }
 
     Value variable(const std::string& name) const {
@@ -322,12 +389,68 @@ class Newt {
             }
             throw std::runtime_error("length() requires a string or list");
         }
+        // Module-prefixed user functions: `module.function(...)`.
+        const auto dot = expression.funcName.originalTxt.find('.');
+        if (dot != std::string::npos && dot != 0 &&
+            expression.funcName.originalTxt.find('.', dot + 1) == std::string::npos &&
+            expression.funcName.originalTxt != "cpptools.length") {
+            const std::string moduleName = expression.funcName.originalTxt.substr(0, dot);
+            if (importedModules.find(moduleName) != importedModules.end()) {
+                const std::string functionName = expression.funcName.originalTxt.substr(dot + 1);
+                if (functionName == "length") {
+                    Value value = evaluate(expression.args.front().get());
+                    if (auto text = std::get_if<std::string>(&value.data))
+                        return Value(static_cast<int64_t>(text->size()));
+                    if (auto list = std::get_if<Value::List>(&value.data))
+                        return Value(static_cast<int64_t>(list->size()));
+                    throw std::runtime_error("length() requires a string or list");
+                }
+                auto found = functions.find(functionName);
+                if (found == functions.end()) {
+                    throw std::runtime_error("Unknown SAL function in module " + moduleName +
+                                             ": " + functionName);
+                }
+                return invokeFunction(*found->second, expression);
+            }
+        }
+        auto functionDefinition = functions.find(expression.funcName.originalTxt);
+        if (functionDefinition != functions.end()) {
+            return invokeFunction(*functionDefinition->second, expression);
+        }
         auto classDefinition = classes.find(expression.funcName.originalTxt);
         if (classDefinition != classes.end()) {
             if (!expression.args.empty()) throw std::runtime_error("SAL class constructors do not accept arguments yet");
             return Value(std::make_shared<Object>(Object{classDefinition->first}));
         }
         throw std::runtime_error("Unknown SAL function: " + expression.funcName.originalTxt);
+    }
+
+    Value invokeFunction(const FuncDefStmt& definition, const CallExpr& expression) {
+        if (expression.args.size() != definition.params.size()) {
+            throw std::runtime_error("Wrong argument count for SAL function " + definition.name.originalTxt);
+        }
+        Newt localScope;
+        localScope.functions = functions;
+        localScope.classes = classes;
+        localScope.importedModules = importedModules;
+        for (std::size_t index = 0; index < definition.params.size(); ++index) {
+            Value argument = evaluate(expression.args[index].get());
+            const std::string& parameterType = definition.params[index].type.originalTxt;
+            if (!parameterType.empty() && parameterType != "dyn") {
+                argument = cast(std::move(argument), parameterType);
+            }
+            localScope.assign(definition.params[index].name.originalTxt, std::move(argument));
+        }
+        Flow flow = localScope.executeBlock(definition.body);
+        if (flow.kind != FlowKind::RETURN && flow.kind != FlowKind::NORMAL) {
+            throw std::runtime_error("Invalid control flow in SAL function " + definition.name.originalTxt);
+        }
+        Value result = flow.kind == FlowKind::RETURN ? std::move(flow.value) : Value{};
+        const std::string& returnType = definition.returnType.originalTxt;
+        if (!returnType.empty() && returnType != "dyn" && !(returnType == "void" && result.data.index() == 0)) {
+            if (!(returnType == "void")) result = cast(std::move(result), returnType);
+        }
+        return result;
     }
 
     Value evaluateAsyncMap(const AsyncMapExpr& expression) const {
@@ -385,6 +508,62 @@ class Newt {
         return Value(std::move(results));
     }
 
+    /**
+     * @brief Runs a cpp block, feeding it the declared SAL variables and storing the results back.
+     * @details The compiled block is a separate process, so values travel through the binary
+     *          marshalling format rather than through shared memory. Names before the `|` must
+     *          already exist in SAL; names after it may be created. Every name is written back, so
+     *          a block can also mutate something it only read.
+     */
+    Flow executeCppBlock(const CppBlockStmt& block) {
+        if (!cppPreparedReady) prepareCppBlocks({});
+
+        std::vector<CppBlockBinding> inputs;
+        inputs.reserve(block.inputs.size());
+        for (const auto& parameter : block.inputs) {
+            const std::string name = parameter.name.originalTxt;
+            try {
+                inputs.push_back({name, parameter.type.originalTxt, toSalValue(variable(name))});
+            } catch (const std::runtime_error&) {
+                throw std::runtime_error("cpp block input '" + name + "' is not defined in SAL");
+            }
+        }
+
+        std::vector<CppBlockBinding> outputs;
+        outputs.reserve(block.outputs.size());
+        for (const auto& parameter : block.outputs) {
+            const std::string name = parameter.name.originalTxt;
+            sal::Value starting;
+            try {
+                starting = toSalValue(variable(name));
+            } catch (const std::runtime_error&) {
+                starting = CppBlockRuntime::defaultFor(parameter.type.originalTxt);
+            }
+            outputs.push_back({name, parameter.type.originalTxt, std::move(starting)});
+        }
+
+        // No-signature blocks were pre-compiled into the shared dispatch binary at startup, so they
+        // dispatch by id. Bound blocks fall back to the standalone execute(source,...) path, which
+        // is still disk-cached and still receives the user's command-line args.
+        std::map<std::string, sal::Value> produced;
+        if (block.inputs.empty() && block.outputs.empty()) {
+            produced = cppBlockRuntime.execute(cppBlockId(block), cppPrepared.binaryPath,
+                                               userArgs, inputs, outputs);
+        } else {
+            produced = cppBlockRuntime.execute(block.source, userArgs, inputs, outputs);
+        }
+        auto storeBack = [&](const std::vector<CppBlockParam>& parameters) {
+            for (const auto& parameter : parameters) {
+                auto found = produced.find(parameter.name.originalTxt);
+                if (found == produced.end()) continue;
+                assign(parameter.name.originalTxt, fromSalValue(found->second));
+            }
+        };
+        storeBack(block.inputs);
+        storeBack(block.outputs);
+        return {};
+    }
+
     Flow execute(const Stmt* statement) {
         if (!statement || dynamic_cast<const NullStmt*>(statement)) return {};
         if (auto item = dynamic_cast<const VarDeclStmt*>(statement)) {
@@ -419,8 +598,18 @@ class Newt {
             classes[item->name.originalTxt] = item;
             return {};
         }
-        if (dynamic_cast<const FuncDefStmt*>(statement)) return {};
-        if (dynamic_cast<const ImportStmt*>(statement)) throw std::runtime_error("SAL imports are not supported by the interpreter yet");
+        if (auto item = dynamic_cast<const FuncDefStmt*>(statement)) {
+            functions[item->name.originalTxt] = item;
+            return {};
+        }
+        if (auto item = dynamic_cast<const ImportStmt*>(statement)) {
+            if (item->directory.empty()) throw std::runtime_error("SAL import requires a module name");
+            importedModules.insert(item->directory.front().originalTxt);
+            return {};
+        }
+        if (auto item = dynamic_cast<const CppBlockStmt*>(statement)) {
+            return executeCppBlock(*item);
+        }
         throw std::runtime_error("Unsupported SAL statement node");
     }
 
@@ -588,12 +777,20 @@ class Newt {
     }
 
     public:
+    void setUserArgs(const std::vector<std::string>& args) { userArgs = args; }
+
     void runAST(const std::vector<std::unique_ptr<Stmt>>& ast) {
         variables.clear();
         classes.clear();
+        functions.clear();
+        importedModules.clear();
+        prepareCppBlocks(ast);
         for (const auto& statement : ast) {
             if (auto classDefinition = dynamic_cast<const ClassDefStmt*>(statement.get())) {
                 classes[classDefinition->name.originalTxt] = classDefinition;
+            }
+            if (auto functionDefinition = dynamic_cast<const FuncDefStmt*>(statement.get())) {
+                functions[functionDefinition->name.originalTxt] = functionDefinition;
             }
         }
         Flow flow = executeBlock(ast);

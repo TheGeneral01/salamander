@@ -1,0 +1,86 @@
+# Exercises cpp { ... } blocks.
+#
+# The clause before | lists SAL variables the block reads; the clause after | lists variables the
+# block may also create. Every declared name is written back, so a block can read and update the
+# same SAL variable without naming it twice.
+
+int count = 5
+list values = [3, 7, 11, 13]
+list squares = []
+int total = 0
+float mean = 0.0
+string label = ""
+
+cpp(int count, list values, list squares | int total, float mean, string label) {
+    long long sum = 0;
+    for (long long value : values) {
+        sum += value;
+        squares.push_back(value * value);
+    }
+    total = sum + count;
+    mean = double(sum) / double(values.size());
+    label = "sum=" + std::to_string(total);
+}
+
+print("total:")
+print(total)
+print("mean:")
+print(mean)
+print("label:")
+print(label)
+print("squares:")
+print(squares)
+
+# Strings, plus a variable the block creates because SAL never declared it.
+string separator = ", "
+list words = ["alpha", "beta", "gamma"]
+string joined = ""
+
+cpp(list words, string separator | string joined) {
+    for (const std::string& word : words) {
+        if (!joined.empty()) joined += separator;
+        joined += word;
+    }
+}
+
+print("joined:")
+print(joined)
+
+cpp(int count | int fresh) {
+    fresh = count * 100;
+}
+
+print("fresh:")
+print(fresh)
+
+# A block with no signature is still a standalone C++ program.
+cpp {
+    #include <cmath>
+    std::cout << "hypotenuse of 6 and 8: " << std::sqrt(36.0 + 64.0) << std::endl;
+}
+
+# Heterogeneous lists cross the boundary as sal::List.
+list mixed = [1, "two", 3.5]
+int mixed_size = 0
+
+cpp(list mixed | int mixed_size) {
+    mixed.push_back("appended");
+    mixed.push_back(42);
+    mixed_size = static_cast<long long>(mixed.size());
+}
+
+print("mixed_size:")
+print(mixed_size)
+print("mixed:")
+print(mixed)
+
+# Command-line args and terminal stdin are available to every block without declaring SAL variables.
+cpp {
+    std::cout << "argc=" << sal::CommandArgs::argc() << std::endl;
+    for (int i = 0; i < sal::CommandArgs::argc(); ++i) {
+        std::cout << "argv[" << i << "]=" << sal::CommandArgs::arg(i) << std::endl;
+    }
+    if (sal::Stdin::hasMore()) {
+        std::cout << "stdin: " << sal::Stdin::readLine() << std::endl;
+    }
+}

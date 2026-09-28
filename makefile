@@ -1,21 +1,25 @@
-CXX      = g++
-CXXFLAGS = -std=c++20 -O2 -Wall -Wextra -I. -Icompiler
-GPU_LIBS = $(shell pkg-config --libs shaderc vulkan)
+CXX = g++
+CXXFLAGS = -std=c++20 -Wall -Wextra -O3
+DEPFLAGS = -MMD -MP
 
-TARGET   = sal
-SRC      = sal.cpp
+# Standard system libraries for Vulkan and shaderc
+LDLIBS = -lvulkan -lshaderc
+
+TARGET = SalRuntime
+OBJS = sal.o
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
-	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(GPU_LIBS)
+$(TARGET): $(OBJS)
+	$(CXX) $(OBJS) $(LDLIBS) -o $(TARGET)
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# Auto-dependency tracking
+-include $(OBJS:.o=.d)
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGETS)
+	rm -f $(OBJS) $(OBJS:.o=.d) $(TARGET)
 
-new:
-	rm -f $(TARGET)
-	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(GPU_LIBS)
-
-gpu:
-	$(MAKE) new
+.PHONY: all clean

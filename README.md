@@ -30,4 +30,9 @@ not a priority right now, SAL will soon feature native multi-threading support a
 Yes! However, this is not implemented yet because the SAL runtime is not quite finished, but one of the first features will be direct exposure to the Vulkan instance, as well as simplified GPU
 access.
 
+### Can SAL use C++ libraries?
+SAL supports a small `cpptools` file API through `import cpptools`. It provides `open`, `read_line`, `read_text`, `write_text`, `read_bytes`, `write_bytes`, `eof`, `close`, `exists`, `size`, `remove`, and `rename`. Binary data crosses the SAL boundary as a list of integers in the range 0 through 255. See `test_cpptools.sal` for a working example.
+
+For APIs without a SAL binding, a standalone `cpp { ... }` block can include system headers and run C++ code. Include directives inside the block are moved to the generated translation unit. Blocks run in a separate generated executable, do not share SAL variables, and are compiled when the block executes. Set `CXX`, `SAL_CPP_CXXFLAGS`, or `SAL_CPP_LDFLAGS` to select the compiler or add include/link flags. Arbitrary C++ declarations are not automatically callable as SAL functions; those require an explicit binding in `cpptools.h` or a native C++ block.
+
 *"A computer can never be held accountable, therefore a computer must never make a management decision."* - **IBM**

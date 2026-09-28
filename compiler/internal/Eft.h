@@ -11,9 +11,9 @@
 
 #pragma once
 
-#include "astObjs.h"
-#include "SALItms.h"
-#include "fileScope.h"
+#include "../astObjs.h"
+#include "../SALItms.h"
+#include "../fileScope.h"
 #include "TypeChecker.h"
 #include <iterator>
 #include <stdexcept>
@@ -109,6 +109,19 @@ class Preprocessor {
 
     static std::unique_ptr<Stmt> cloneStmt(const Stmt* stmt) {
         if (dynamic_cast<const NullStmt*>(stmt)) return std::make_unique<NullStmt>();
+        if (auto* import = dynamic_cast<const ImportStmt*>(stmt)) {
+            auto copy = std::make_unique<ImportStmt>();
+            copy->directory = import->directory;
+            copy->alias = import->alias;
+            return copy;
+        }
+        if (auto* cppBlock = dynamic_cast<const CppBlockStmt*>(stmt)) {
+            auto copy = std::make_unique<CppBlockStmt>();
+            copy->source = cppBlock->source;
+            copy->inputs = cppBlock->inputs;
+            copy->outputs = cppBlock->outputs;
+            return copy;
+        }
         if (dynamic_cast<const BreakStmt*>(stmt)) return std::make_unique<BreakStmt>();
         if (dynamic_cast<const ContinueStmt*>(stmt)) return std::make_unique<ContinueStmt>();
         if (auto* ret = dynamic_cast<const ReturnStmt*>(stmt)) {
@@ -508,8 +521,28 @@ class Preprocessor {
         typeChecker.check(processedAST);
         functionNodes.clear();
         extractFunctions(processedAST, "");
+        // Capture copies of top-level functions BEFORE functionNodes is cleared, so the
+        // interpreter (Newt) can register and invoke them by name, including
+        // module-qualified calls like `module.function(...)` that the inliner
+        // intentionally leaves untouched.
+        std::vector<std::unique_ptr<FuncDefStmt>> keptFunctions;
+        for (const auto& [key, func] : functionNodes) {
+            if (key.find(':') != std::string::npos) continue;
+            auto keptCopy = std::make_unique<FuncDefStmt>();
+            keptCopy->name = func->name;
+            keptCopy->returnType = func->returnType;
+            keptCopy->params = func->params;
+            keptCopy->attributes = func->attributes;
+            for (const auto& bodyStmt : func->body) {
+                keptCopy->body.push_back(cloneStmt(bodyStmt.get()));
+            }
+            keptFunctions.push_back(std::move(keptCopy));
+        }
         std::unordered_set<std::string> activeFunctions;
         inlineStatements(processedAST, activeFunctions);
         functionNodes.clear();
+        for (auto& keptCopy : keptFunctions) {
+            processedAST.push_back(std::move(keptCopy));
+        }
     }
 };

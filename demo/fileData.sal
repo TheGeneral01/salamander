@@ -1,0 +1,2 @@
+def void printOut(str text):
+    print(text)

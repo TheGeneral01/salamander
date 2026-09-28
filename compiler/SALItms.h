@@ -95,7 +95,9 @@ enum SalTknType {
 
     NAMESPACE,
 
-    NEWLINE // A sub for the main indent.
+    NEWLINE, // A sub for the main indent.
+
+    CPPBLOCK
 };
 
 struct SALTKN {
