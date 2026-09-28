@@ -1,7 +1,7 @@
 ## Welcome to Salamander!
 
 ## Current Status of Code:
-Non-Functional. Interpreter is the next main task.
+Functional-ish, good enough to work, but not efficient enough to make me happy.
 
 ### What is Salamander?
 Salamander is a programming language designed to leverage the often ignored and underutilized GPU in while loops, and parallel tasks. By using Vulkan as a back-end, all types of GPUs are supported,
