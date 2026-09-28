@@ -10,6 +10,13 @@ from Nvidia, AMD, integrated graphics, and all other Vulkan-Compatible GPUs. It 
 ### Do I need to change the way I write code?
 No. SAL was designed to handle all GPU logic in secret on the back-end. It requires no experience with Vulkan at all, and offers great potential performance benefits depending on the task at hand.
 
+### Was SAL created with the use of AI?
+Yes, for now. I have a deadline to meet for college apps, and while I do not entirely like relying on AI, it has proved useful in debugging, writing advanced code, and planning architecture for this first iteration.
+I will be re-writing this myself, since the AST architecture could be re-engineered to greatly benefit performance, and modular abilities. While I tried to complete most of this code myself, I have
+had to rely on AI for helping me meet this deadline more so than usual. For an official release, I will not be using AI outside of basic printing functions for enums. I try to be open about this
+policy, since many advanced concepts I can only learn from YouTube videos anyway, and I have yet to properly be formally educated on low-level architecture. I apologize to those of you whom
+want complete code now, but that is not quite yet the reality.
+
 ### Can SAL use multiple GPUs?
 Soon™
 
