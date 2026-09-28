@@ -277,6 +277,18 @@ inline bool checkFileScope(const std::vector<std::unique_ptr<Stmt>>& fileAST) {
             }
         } else if (auto binOp = dynamic_cast<const BinOpExpr*>(expr)) {
             return self(self, binOp->left.get()) && self(self, binOp->right.get());
+        } else if (auto index = dynamic_cast<const IndexExpr*>(expr)) {
+            return self(self, index->target.get()) && self(self, index->index.get());
+        } else if (auto map = dynamic_cast<const AsyncMapExpr*>(expr)) {
+            if (!self(self, map->source.get())) return false;
+            scope.enterScope();
+            VarDeclStmt iterator;
+            iterator.name = map->iterator;
+            iterator.type = makeToken(DYN, "dyn", map->iterator.line, map->iterator.col);
+            scope.declareVariable(iterator.name.originalTxt, &iterator);
+            const bool valid = self(self, map->operation.get());
+            scope.exitScope();
+            return valid;
         } else if (auto unOp = dynamic_cast<const UnOpExpr*>(expr)) {
             return self(self, unOp->value.get());
         } else if (auto call = dynamic_cast<const CallExpr*>(expr)) {

@@ -1,34 +1,62 @@
-class Sample:
-    int value = 4
+# Token ids: 0=<bos>, 1=the, 2=cat, 3=sat, 4=on, 5=mat, 6=<eos>.
+int vocabulary_size = 7
+int bos_token = 0
+int eos_token = 6
+list vocabulary = ["<bos>", "the", "cat", "sat", "on", "mat", "<eos>"]
+list training_corpus = [0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6]
+list transition_counts = [0, 0, 0, 0, 0, 0, 0,
+                          0, 0, 0, 0, 0, 0, 0,
+                          0, 0, 0, 0, 0, 0, 0,
+                          0, 0, 0, 0, 0, 0, 0,
+                          0, 0, 0, 0, 0, 0, 0,
+                          0, 0, 0, 0, 0, 0, 0,
+                          0, 0, 0, 0, 0, 0, 0]
 
-def dyn choose_value(bool use_integer, dyn source):
-    int adjustment = 3
-    dyn prepared = source
-    prepared = prepared + adjustment
+# Learn one-step token transition counts from the tiny corpus.
+int training_position = 0
+int training_limit = 13
+while training_position < training_limit:
+    int source_token = training_corpus[training_position]
+    int target_token = training_corpus[training_position + 1]
+    int transition_index = source_token * vocabulary_size + target_token
+    transition_counts[transition_index] = transition_counts[transition_index] + 1
+    training_position = training_position + 1
 
-    if use_integer:
-        int scaled_integer = adjustment * 2
-        return prepared + scaled_integer
-    else:
-        float scaled_float = adjustment / 2.0
-        return prepared + scaled_float
+# Greedily choose the most frequent next token for each generated token.
+list generated_tokens = [0, 0, 0, 0, 0, 0]
+int current_token = bos_token
+int generation_position = 0
+int generation_limit = 6
+while generation_position < generation_limit:
+    int row_base = current_token * vocabulary_size
+    int candidate = 0
+    int best_score = -1
+    int best_token = eos_token
+    while candidate < vocabulary_size:
+        int score_index = row_base + candidate
+        int candidate_score = transition_counts[score_index]
+        if candidate_score > best_score:
+            best_score = candidate_score
+            best_token = candidate
+        candidate = candidate + 1
 
-def dyn normalize(dyn input_value):
-    int offset = 1
-    dyn intermediate = input_value
-    intermediate = intermediate + offset
-    return intermediate
+    generated_tokens[generation_position] = best_token
+    current_token = best_token
+    generation_position = generation_position + 1
+    if current_token == eos_token:
+        generation_position = generation_limit
 
-Sample first = Sample()
-Sample second = Sample()
-bool equal_samples = first == second
-
-dyn numeric_value = 5
-numeric_value = 2.5
-dyn selected_value = choose_value(true, numeric_value)
-dyn normalized_value = normalize(selected_value)
-
-if equal_samples:
-    print(normalized_value)
-else:
-    print(numeric_value)
+print("Tiny bigram language model")
+print("Prompt:")
+print(vocabulary[bos_token])
+print("Generated tokens:")
+print(vocabulary[generated_tokens[0]])
+print(vocabulary[generated_tokens[1]])
+print(vocabulary[generated_tokens[2]])
+print(vocabulary[generated_tokens[3]])
+print(vocabulary[generated_tokens[4]])
+print(vocabulary[generated_tokens[5]])
+print("Training transitions:")
+print(training_position)
+print("Generated token count:")
+print(generation_position)

@@ -1,3 +1,14 @@
+/* =================================================================================================== */
+/*                                                                                                     */
+/*  Module: TypeChecker.h                                                                              */
+/*  Description: Infers SAL expression types and validates type operations.                              */
+/*  Date Last Updated: 9/27/26                                                                         */
+/*                                                                                                     */
+/*  Author: Alexander Tuten - TheGeneral01                                                             */
+/*  Github Repo: https://github.com/TheGeneral01/salamander                                            */
+/*                                                                                                     */
+/* =================================================================================================== */
+
 #pragma once
 
 #include "../astObjs.h"
@@ -16,6 +27,7 @@ class TypeChecker {
 
     std::unordered_set<std::string> classNames;
     std::unordered_map<std::string, TypeSet> dynamicTypes;
+    std::unordered_map<std::string, TypeSet> listElementTypes;
     std::unordered_map<std::string, std::vector<std::string>> functionParameters;
     std::unordered_map<std::string, std::vector<TypeSet>> functionParameterTypes;
     std::unordered_map<std::string, std::vector<bool>> functionDynamicParameters;
@@ -58,6 +70,20 @@ class TypeChecker {
         if (auto* variable = dynamic_cast<const VarExpr*>(expr)) {
             auto copy = std::make_unique<VarExpr>();
             copy->name = variable->name;
+            return copy;
+        }
+        if (auto* index = dynamic_cast<const IndexExpr*>(expr)) {
+            auto copy = std::make_unique<IndexExpr>();
+            copy->target = cloneExpr(index->target.get());
+            copy->index = cloneExpr(index->index.get());
+            return copy;
+        }
+        if (auto* map = dynamic_cast<const AsyncMapExpr*>(expr)) {
+            auto copy = std::make_unique<AsyncMapExpr>();
+            copy->operation = cloneExpr(map->operation.get());
+            copy->iterator = map->iterator;
+            copy->source = cloneExpr(map->source.get());
+            copy->elementTypes = map->elementTypes;
             return copy;
         }
         if (auto* binary = dynamic_cast<const BinOpExpr*>(expr)) {
@@ -137,7 +163,13 @@ class TypeChecker {
             auto binding = bindings.find(variable->name.originalTxt);
             return binding == bindings.end() ? std::move(expr) : cloneExpr(binding->second);
         }
-        if (auto* binary = dynamic_cast<BinOpExpr*>(expr.get())) {
+        if (auto* index = dynamic_cast<IndexExpr*>(expr.get())) {
+            index->target = substituteExpr(std::move(index->target), bindings);
+            index->index = substituteExpr(std::move(index->index), bindings);
+        } else if (auto* map = dynamic_cast<AsyncMapExpr*>(expr.get())) {
+            map->operation = substituteExpr(std::move(map->operation), bindings);
+            map->source = substituteExpr(std::move(map->source), bindings);
+        } else if (auto* binary = dynamic_cast<BinOpExpr*>(expr.get())) {
             binary->left = substituteExpr(std::move(binary->left), bindings);
             binary->right = substituteExpr(std::move(binary->right), bindings);
         } else if (auto* unary = dynamic_cast<UnOpExpr*>(expr.get())) {
@@ -207,6 +239,19 @@ class TypeChecker {
             if (classNames.find(variable->name.originalTxt) != classNames.end()) return {variable->name.originalTxt};
             return {};
         }
+        if (auto* index = dynamic_cast<const IndexExpr*>(expr)) {
+            if (auto* variable = dynamic_cast<const VarExpr*>(index->target.get())) {
+                auto found = listElementTypes.find(variable->name.originalTxt);
+                if (found != listElementTypes.end()) return found->second;
+            }
+            if (auto* list = dynamic_cast<const ListExpr*>(index->target.get())) {
+                TypeSet elements;
+                for (const auto& item : list->itms) elements = mergeTypes(elements, infer(item.get(), environment));
+                return elements;
+            }
+            return {};
+        }
+        if (dynamic_cast<const AsyncMapExpr*>(expr)) return {"list"};
         if (auto* cast = dynamic_cast<const CastExpr*>(expr)) return {cast->targetType.originalTxt};
         if (auto* dispatch = dynamic_cast<const TypeDispatchExpr*>(expr)) {
             TypeSet result;
@@ -232,6 +277,7 @@ class TypeChecker {
             return input;
         }
         if (auto* call = dynamic_cast<const CallExpr*>(expr)) {
+            if (call->args.empty() && call->funcName.originalTxt.ends_with(".length")) return {"int"};
             auto knownReturn = functionReturnTypes.find(call->funcName.originalTxt);
             if (knownReturn != functionReturnTypes.end()) return knownReturn->second;
             auto routes = functionRoutes.find(call->funcName.originalTxt);
@@ -264,6 +310,13 @@ class TypeChecker {
                 collectClassesAndDyn(classDef->body, classEnvironment,
                                      functionKey(scope, classDef->name.originalTxt));
             } else if (auto* variable = dynamic_cast<const VarDeclStmt*>(statement.get())) {
+                if (auto* list = dynamic_cast<const ListExpr*>(variable->init.get())) {
+                    TypeSet elementTypes;
+                    for (const auto& item : list->itms) {
+                        elementTypes = mergeTypes(elementTypes, infer(item.get(), environment));
+                    }
+                    listElementTypes[variable->name.originalTxt] = std::move(elementTypes);
+                }
                 if (isDynamicType(variable->type)) {
                     TypeSet types = infer(variable->init.get(), environment);
                     dynamicTypes[variable->name.originalTxt] = types;
@@ -871,6 +924,40 @@ class TypeChecker {
             checkExpr(cast->value, environment);
             return {cast->targetType.originalTxt};
         }
+        if (auto* index = dynamic_cast<IndexExpr*>(expr.get())) {
+            TypeSet elementTypes = infer(index, environment);
+            checkExpr(index->target, environment);
+            TypeSet indexTypes = checkExpr(index->index, environment);
+            if (!indexTypes.empty() && !std::all_of(indexTypes.begin(), indexTypes.end(), isNumeric)) {
+                throw std::runtime_error("List index must be numeric");
+            }
+            return elementTypes;
+        }
+        if (auto* map = dynamic_cast<AsyncMapExpr*>(expr.get())) {
+            auto sourceVariable = dynamic_cast<VarExpr*>(map->source.get());
+            const std::string sourceName = sourceVariable ? sourceVariable->name.originalTxt : std::string{};
+            checkExpr(map->source, environment);
+            TypeEnvironment mapEnvironment = environment;
+            TypeSet itemTypes;
+            if (!sourceName.empty()) {
+                auto found = listElementTypes.find(sourceName);
+                if (found != listElementTypes.end()) itemTypes = found->second;
+            }
+            if (auto* sourceList = dynamic_cast<ListExpr*>(map->source.get())) {
+                for (const auto& item : sourceList->itms) itemTypes = mergeTypes(itemTypes, infer(item.get(), environment));
+            }
+            mapEnvironment[map->iterator.originalTxt] = itemTypes.empty() ? TypeSet{"dyn"} : itemTypes;
+            auto previousDynamic = dynamicTypes.find(map->iterator.originalTxt);
+            const bool hadPreviousDynamic = previousDynamic != dynamicTypes.end();
+            TypeSet previousTypes;
+            if (hadPreviousDynamic) previousTypes = previousDynamic->second;
+            if (itemTypes.size() > 1) dynamicTypes[map->iterator.originalTxt] = itemTypes;
+            TypeSet resultTypes = checkExpr(map->operation, mapEnvironment);
+            map->elementTypes.assign(resultTypes.begin(), resultTypes.end());
+            if (hadPreviousDynamic) dynamicTypes[map->iterator.originalTxt] = std::move(previousTypes);
+            else dynamicTypes.erase(map->iterator.originalTxt);
+            return {"list"};
+        }
         if (auto* test = dynamic_cast<TypeIsExpr*>(expr.get())) {
             checkExpr(test->value, environment);
             return {"bool"};
@@ -924,6 +1011,10 @@ class TypeChecker {
         for (auto it = statements.begin(); it != statements.end();) {
             if (auto* variable = dynamic_cast<VarDeclStmt*>(it->get())) {
                 TypeSet valueTypes = checkExpr(variable->init, environment);
+                if (auto* map = dynamic_cast<AsyncMapExpr*>(variable->init.get())) {
+                    listElementTypes[variable->name.originalTxt] =
+                        TypeSet(map->elementTypes.begin(), map->elementTypes.end());
+                }
                 if (isDynamicType(variable->type)) {
                     const std::string name = variable->name.originalTxt;
                     auto foundTypes = dynamicTypes.find(name);
@@ -1022,6 +1113,7 @@ public:
     void check(std::vector<std::unique_ptr<Stmt>>& ast) {
         classNames.clear();
         dynamicTypes.clear();
+        listElementTypes.clear();
         functionRoutes.clear();
         functionParameters.clear();
         functionParameterTypes.clear();

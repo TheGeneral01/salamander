@@ -1,7 +1,7 @@
 /* =================================================================================================== */
 /*                                                                                                     */
-/*  Module: SalString.h                                                                                */
-/*  Description: Defines the SAL string runtime value.                                                   */
+/*  Module: ftools.h                                                                                   */
+/*  Description: Reserved standard-library header for SAL file helpers.                                 */
 /*  Date Last Updated: 9/27/26                                                                         */
 /*                                                                                                     */
 /*  Author: Alexander Tuten - TheGeneral01                                                             */
@@ -11,14 +11,3 @@
 
 #pragma once
 
-#include "../var.h"
-#include <string>
-#include <utility>
-
-struct SalString : public SalVariable {
-    std::string value;
-
-    SalString(std::string val = {}) : SalVariable(SalType::STRING), value(std::move(val)) {}
-
-    std::unique_ptr<SalVariable> castTo(SalType targetType) const override;
-};

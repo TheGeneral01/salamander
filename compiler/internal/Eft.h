@@ -39,6 +39,20 @@ class Preprocessor {
             copy->name = variable->name;
             return copy;
         }
+        if (auto* index = dynamic_cast<const IndexExpr*>(expr)) {
+            auto copy = std::make_unique<IndexExpr>();
+            copy->target = cloneExpr(index->target.get());
+            copy->index = cloneExpr(index->index.get());
+            return copy;
+        }
+        if (auto* map = dynamic_cast<const AsyncMapExpr*>(expr)) {
+            auto copy = std::make_unique<AsyncMapExpr>();
+            copy->operation = cloneExpr(map->operation.get());
+            copy->iterator = map->iterator;
+            copy->source = cloneExpr(map->source.get());
+            copy->elementTypes = map->elementTypes;
+            return copy;
+        }
         if (auto* binary = dynamic_cast<const BinOpExpr*>(expr)) {
             auto copy = std::make_unique<BinOpExpr>();
             copy->left = cloneExpr(binary->left.get());
@@ -147,7 +161,13 @@ class Preprocessor {
             auto binding = bindings.find(variable->name.originalTxt);
             return binding == bindings.end() ? std::move(expr) : cloneExpr(binding->second);
         }
-        if (auto* binary = dynamic_cast<BinOpExpr*>(expr.get())) {
+        if (auto* index = dynamic_cast<IndexExpr*>(expr.get())) {
+            index->target = substituteExpr(std::move(index->target), bindings);
+            index->index = substituteExpr(std::move(index->index), bindings);
+        } else if (auto* map = dynamic_cast<AsyncMapExpr*>(expr.get())) {
+            map->operation = substituteExpr(std::move(map->operation), bindings);
+            map->source = substituteExpr(std::move(map->source), bindings);
+        } else if (auto* binary = dynamic_cast<BinOpExpr*>(expr.get())) {
             binary->left = substituteExpr(std::move(binary->left), bindings);
             binary->right = substituteExpr(std::move(binary->right), bindings);
         } else if (auto* unary = dynamic_cast<UnOpExpr*>(expr.get())) {
@@ -283,7 +303,13 @@ class Preprocessor {
     std::unique_ptr<Expr> inlineExpr(
         std::unique_ptr<Expr> expr, std::unordered_set<std::string>& activeFunctions) {
         if (!expr) return nullptr;
-        if (auto* binary = dynamic_cast<BinOpExpr*>(expr.get())) {
+        if (auto* index = dynamic_cast<IndexExpr*>(expr.get())) {
+            index->target = inlineExpr(std::move(index->target), activeFunctions);
+            index->index = inlineExpr(std::move(index->index), activeFunctions);
+        } else if (auto* map = dynamic_cast<AsyncMapExpr*>(expr.get())) {
+            map->source = inlineExpr(std::move(map->source), activeFunctions);
+            map->operation = inlineExpr(std::move(map->operation), activeFunctions);
+        } else if (auto* binary = dynamic_cast<BinOpExpr*>(expr.get())) {
             binary->left = inlineExpr(std::move(binary->left), activeFunctions);
             binary->right = inlineExpr(std::move(binary->right), activeFunctions);
         } else if (auto* unary = dynamic_cast<UnOpExpr*>(expr.get())) {
@@ -351,6 +377,7 @@ class Preprocessor {
                 for (auto& path : paths) {
                     TypeDispatchCase item;
                     item.statements = std::move(path.statements);
+                    substituteStatements(item.statements, bindings);
                     for (auto& guard : path.guards) {
                         guard.value = substituteExpr(std::move(guard.value), bindings);
                         item.guards.push_back({inlineExpr(std::move(guard.value), activeFunctions),

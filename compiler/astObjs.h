@@ -1,3 +1,14 @@
+/* =================================================================================================== */
+/*                                                                                                     */
+/*  Module: astObjs.h                                                                                  */
+/*  Description: Defines the abstract syntax tree nodes used by SAL.                                  */
+/*  Date Last Updated: 9/27/26                                                                         */
+/*                                                                                                     */
+/*  Author: Alexander Tuten - TheGeneral01                                                             */
+/*  Github Repo: https://github.com/TheGeneral01/salamander                                            */
+/*                                                                                                     */
+/* =================================================================================================== */
+
 #pragma once
 
 #include "SALItms.h"
@@ -19,6 +30,18 @@ struct LiteralExpr : Expr {
 
 struct VarExpr : Expr {
     SALTKN name;
+};
+
+struct IndexExpr : Expr {
+    std::unique_ptr<Expr> target;
+    std::unique_ptr<Expr> index;
+};
+
+struct AsyncMapExpr : Expr {
+    std::unique_ptr<Expr> operation;
+    SALTKN iterator;
+    std::unique_ptr<Expr> source;
+    std::vector<std::string> elementTypes;
 };
 
 struct BinOpExpr : Expr {
@@ -88,8 +111,22 @@ struct IfStmt : Stmt {
 };
 
 struct GLSL_shader {
-    // The main shader for data within while loops.
     std::vector<uint32_t> SPIRV_SHADER;
+    std::string source;
+    std::vector<std::string> stateVariables;
+    std::vector<std::string> inputBuffers;
+    std::vector<std::string> outputBuffers;
+    std::string inductionVariable;
+    std::string invariantBound;
+    uint32_t descriptorSetCount = 0;
+    uint32_t workgroupSize = 1;
+    uint32_t ignoredPrintCalls = 0;
+    uint64_t estimatedIterations = 0;
+    bool parallelEligible = false;
+    bool gpuEligible = false;
+    bool gpuExecuted = false;
+    bool invariantBoundHoisted = false;
+    bool counterStrengthReduced = false;
 
 };
 

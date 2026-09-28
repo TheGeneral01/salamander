@@ -23,7 +23,7 @@
 class lexer {
     std::vector<std::string> lddFile = {};
     std::vector<SALTKN> tokens;
-    int line = 0, col = 0;
+    std::size_t line = 0, col = 0;
     public:
     lexer() = default;
     /**
@@ -66,13 +66,14 @@ class lexer {
         return cur;
     }
     bool isChar(char txt) {return curChar() == txt;}
-    std::string getTxt(int length) {
+    std::string getTxt(std::size_t length) {
         if (EoF()) return "";
         return lddFile[line].substr(col, length);
     }
     std::string goToSpace() {
         std::string text = "";
-        while (!chk() && !std::isspace(static_cast<unsigned char>(curChar())) &&
+        const std::size_t startLine = line;
+        while (!chk() && line == startLine && !std::isspace(static_cast<unsigned char>(curChar())) &&
                !SalDelimiters.contains(getTxt(1)) &&
                !SalOperators.contains(getTxt(1)) &&
                !SalOperators.contains(getTxt(2))) {
@@ -202,7 +203,6 @@ class lexer {
                 tokens.push_back(makeToken(IDENTIFIER, txt, tokenLine, tokenCol, txt.length()));
             }
         }
-        printLexer(tokens);
         return tokens;
     }
 

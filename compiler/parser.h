@@ -13,6 +13,8 @@
 
 #include "SALItms.h"
 #include "astObjs.h"
+#include "utils/printTkn.h"
+#include <fstream>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -79,7 +81,7 @@ class parser {
     private:
     std::vector<std::unique_ptr<ImportStmt>> includedFiles;
     std::vector<SALTKN> tokens;
-    int pos = 0;
+    std::size_t pos = 0;
 
     const SALTKN& cur() { return tokens[pos]; }
     const SALTKN& prev() { return tokens[pos-1]; }
@@ -169,7 +171,7 @@ class parser {
         }
 
         // Type declaration via types or a custom type.
-        if ((chk(TYPE) || chk(IDENTIFIER)) && chkNext(IDENTIFIER)) {
+        if ((chk(TYPE) || chk(LIST) || chk(IDENTIFIER)) && chkNext(IDENTIFIER)) {
             return parseVarDecl();
         }
 
@@ -279,15 +281,29 @@ class parser {
         return parsePrecedence(0);
     }
 
-    std::unique_ptr<Expr> parsePrecedence(int minPrec) {
+    std::unique_ptr<Expr> parsePostfix() {
         auto left = parseUnary();
+        while (!isAtEnd() && chk(LBRACKET)) {
+            adv();
+            auto index = parseExpr();
+            if (!mtch(RBRACKET)) throw std::runtime_error("Expected ']' after list index");
+            auto access = std::make_unique<IndexExpr>();
+            access->target = std::move(left);
+            access->index = std::move(index);
+            left = std::move(access);
+        }
+        return left;
+    }
+
+    std::unique_ptr<Expr> parsePrecedence(int minPrec) {
+        auto left = parsePostfix();
 
         while (!isAtEnd() && (isBinaryMathOperator(cur().type) || chk(ASSIGN))) {
             int prec = getPrecedence(cur().type);
             if (prec < minPrec) break;
 
             auto op = adv();
-            auto right = parseUnary();
+            auto right = parsePrecedence(prec + (op.type == ASSIGN ? 0 : 1));
 
             auto binop = std::make_unique<BinOpExpr>();
             binop->left = std::move(left);
@@ -313,6 +329,25 @@ class parser {
 
     std::unique_ptr<Expr> parsePrimary() {
         skipIndent();
+
+        if (mtch(ASYNC)) {
+            if (!mtch(LPAREN)) throw std::runtime_error("Expected '(' after async");
+            auto operation = parseExpr();
+            if (!mtch(RPAREN)) throw std::runtime_error("Expected ')' after async operation");
+            if (!mtch(FOR)) throw std::runtime_error("Expected 'for' after async operation");
+            if (!chk(IDENTIFIER)) throw std::runtime_error("Expected async-map iterator name");
+            SALTKN iterator = adv();
+            if (!chk(IDENTIFIER) || cur().originalTxt != "in") {
+                throw std::runtime_error("Expected 'in' after async-map iterator");
+            }
+            adv();
+            auto source = parseExpr();
+            auto map = std::make_unique<AsyncMapExpr>();
+            map->operation = std::move(operation);
+            map->iterator = std::move(iterator);
+            map->source = std::move(source);
+            return map;
+        }
 
         // Parse literal expressions.                      Special cases for FSTRLIT are handled in scope checking and codegen.
         if (chk(INTLIT) || chk(FLOATLIT) || chk(STRLIT) || chk(FSTRLIT) ||
@@ -381,7 +416,7 @@ class parser {
     std::unique_ptr<VarDeclStmt> parseVarDecl() {
         auto decl = std::make_unique<VarDeclStmt>();
 
-        if (chk(DYN) || chk(TYPE) || chk(IDENTIFIER)) {
+        if (chk(DYN) || chk(TYPE) || chk(LIST) || chk(IDENTIFIER)) {
             decl->type = adv();
         }
 
@@ -468,13 +503,55 @@ class parser {
         std::cout << std::string(indent * 2, ' ') << "ContinueStmt" << std::endl;
     }
 
+    void printAst(const std::vector<std::unique_ptr<Stmt>>& statements,
+                  const std::string& title = "AST") {
+        std::cout << title << " (" << statements.size() << " statements)" << std::endl;
+        for (const auto& statement : statements) printAst(statement, 1);
+    }
+
+    void printAstToFile(const std::vector<std::unique_ptr<Stmt>>& statements,
+                        const std::string& filename,
+                        const std::string& title = "Final AST") {
+        std::ofstream output(filename);
+        if (!output.is_open()) {
+            throw std::runtime_error("Failed to open AST output file: " + filename);
+        }
+
+        struct OutputRedirect {
+            std::streambuf* previous;
+            explicit OutputRedirect(std::streambuf* destination)
+                : previous(std::cout.rdbuf(destination)) {}
+            ~OutputRedirect() { std::cout.rdbuf(previous); }
+        } redirect(output.rdbuf());
+
+        printAst(statements, title);
+    }
+
+    void printAttributes(const std::vector<SalTknType>& attributes, int indent) {
+        if (attributes.empty()) return;
+        std::cout << std::string(indent * 2, ' ') << "Attributes:";
+        for (SalTknType attribute : attributes) {
+            std::cout << " " << salTknTypeToString(attribute);
+        }
+        std::cout << std::endl;
+    }
+
     void printAst(const std::unique_ptr<Stmt>& stmt, int indent = 0) {
         if (!stmt) return;
         std::string p(indent * 2, ' ');
 
-        if (auto v = dynamic_cast<VarDeclStmt*>(stmt.get())) {
+        if (dynamic_cast<NullStmt*>(stmt.get())) {
+            std::cout << p << "NullStmt" << std::endl;
+        } else if (auto importStmt = dynamic_cast<ImportStmt*>(stmt.get())) {
+            std::cout << p << "Import:";
+            for (const auto& part : importStmt->directory) std::cout << " " << part.originalTxt;
+            if (!importStmt->alias.originalTxt.empty()) std::cout << " as " << importStmt->alias.originalTxt;
+            std::cout << std::endl;
+        } else if (auto v = dynamic_cast<VarDeclStmt*>(stmt.get())) {
             std::cout << p << "VarDecl: " << v->name.originalTxt << " (" << v->type.originalTxt << ")" << std::endl;
-            if (v->init) printExpr(v->init, indent + 1);
+            printAttributes(v->attributes, indent + 1);
+            std::cout << p << "  Initializer:" << std::endl;
+            printExpr(v->init, indent + 2);
         } else if (auto i = dynamic_cast<IfStmt*>(stmt.get())) {
             std::cout << p << "If" << std::endl;
             std::cout << p << "  Condition:" << std::endl;
@@ -491,14 +568,21 @@ class parser {
             printExpr(w->condition, indent + 2);
             std::cout << p << "  Body:" << std::endl;
             for (auto& s : w->body) printAst(s, indent + 2);
+            std::cout << p << "  Shader bytecode words: " << w->shader.SPIRV_SHADER.size() << std::endl;
         } else if (auto f = dynamic_cast<FuncDefStmt*>(stmt.get())) {
-            std::cout << p << "FuncDef: " << f->name.originalTxt << std::endl;
+            std::cout << p << "FuncDef: " << f->name.originalTxt
+                      << " -> " << f->returnType.originalTxt << std::endl;
+            printAttributes(f->attributes, indent + 1);
             for (auto& pr : f->params)
-                std::cout << p << "  Param: " << pr.name.originalTxt << " (" << pr.type.originalTxt << ")" << std::endl;
+                std::cout << p << "  Param: " << pr.name.originalTxt << " (" << pr.type.originalTxt
+                          << ", ref=" << (pr.is_reference ? "true" : "false") << ")" << std::endl;
             std::cout << p << "  Body:" << std::endl;
             for (auto& s : f->body) printAst(s, indent + 2);
         } else if (auto c = dynamic_cast<ClassDefStmt*>(stmt.get())) {
-            std::cout << p << "ClassDef: " << c->name.originalTxt << std::endl;
+            std::cout << p << "ClassDef: " << c->name.originalTxt;
+            if (!c->inheritance.originalTxt.empty()) std::cout << " : " << c->inheritance.originalTxt;
+            std::cout << std::endl;
+            printAttributes(c->attributes, indent + 1);
             for (auto& b : c->body) printAst(b, indent + 1);
         } else if (auto r = dynamic_cast<ReturnStmt*>(stmt.get())) {
             std::cout << p << "ReturnStmt:" << std::endl;
@@ -510,6 +594,8 @@ class parser {
         } else if (auto e = dynamic_cast<ExprStmt*>(stmt.get())) {
             std::cout << p << "ExprStmt:" << std::endl;
             printExpr(e->expr, indent + 1);
+        } else {
+            std::cout << p << "<unknown statement node>" << std::endl;
         }
     }
 
@@ -517,12 +603,14 @@ class parser {
         if (!expr) return;
         std::string p(indent * 2, ' ');
 
-        if (auto l = dynamic_cast<LiteralExpr*>(expr.get())) {
+        if (dynamic_cast<NullExpr*>(expr.get())) {
+            std::cout << p << "NullExpr" << std::endl;
+        } else if (auto l = dynamic_cast<LiteralExpr*>(expr.get())) {
             std::cout << p << "Literal: " << l->value.originalTxt << std::endl;
         } else if (auto v = dynamic_cast<VarExpr*>(expr.get())) {
             std::cout << p << "Var: " << v->name.originalTxt << std::endl;
         } else if (auto list = dynamic_cast<ListExpr*>(expr.get())) {
-            std::cout << p << "List:" << std::endl;
+            std::cout << p << "List (" << list->type.originalTxt << "):" << std::endl;
             for (const auto& item : list->itms) printExpr(item, indent + 1);
         } else if (auto b = dynamic_cast<BinOpExpr*>(expr.get())) {
             std::cout << p << "BinOp: " << b->op.originalTxt << std::endl;
@@ -536,6 +624,37 @@ class parser {
         } else if (auto c = dynamic_cast<CallExpr*>(expr.get())) {
             std::cout << p << "Call: " << c->funcName.originalTxt << std::endl;
             for (const auto& item : c->args) printExpr(item, indent + 1);
+        } else if (auto cast = dynamic_cast<CastExpr*>(expr.get())) {
+            std::cout << p << "Cast to " << cast->targetType.originalTxt << std::endl;
+            printExpr(cast->value, indent + 1);
+        } else if (auto typeTest = dynamic_cast<TypeIsExpr*>(expr.get())) {
+            std::cout << p << "IsType " << typeTest->checkedType.originalTxt << std::endl;
+            printExpr(typeTest->value, indent + 1);
+        } else if (auto dispatch = dynamic_cast<TypeDispatchExpr*>(expr.get())) {
+            std::cout << p << "TypeDispatch (" << dispatch->cases.size() << " cases)" << std::endl;
+            for (std::size_t index = 0; index < dispatch->cases.size(); ++index) {
+                const auto& item = dispatch->cases[index];
+                std::cout << p << "  Case " << index << ":" << std::endl;
+                if (!item.guards.empty()) {
+                    std::cout << p << "    Guards:" << std::endl;
+                    for (const auto& guard : item.guards) {
+                        std::cout << p << "      " << (guard.isCondition ? "Condition" : "Type")
+                                  << (guard.negate ? " not" : "")
+                                  << (guard.checkedType.originalTxt.empty()
+                                      ? "" : " " + guard.checkedType.originalTxt)
+                                  << std::endl;
+                        printExpr(guard.value, indent + 4);
+                    }
+                }
+                if (!item.statements.empty()) {
+                    std::cout << p << "    Setup:" << std::endl;
+                    for (const auto& statement : item.statements) printAst(statement, indent + 3);
+                }
+                std::cout << p << "    Value:" << std::endl;
+                printExpr(item.value, indent + 3);
+            }
+        } else {
+            std::cout << p << "<unknown expression node>" << std::endl;
         }
     }
 

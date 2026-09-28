@@ -11,9 +11,10 @@
 
 #include "compiler/lexer.h"
 #include "compiler/parser.h"
-#include "compiler/salWriteCpp.h"
 #include "compiler/fileScope.h"
 #include "compiler/internal/Eft.h"
+#include "compiler/internal/GpuScheduler.h"
+#include "compiler/internal/Newt.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -56,6 +57,7 @@ class compiler {
     public:
     RawSalFile file;
     std::vector<std::unique_ptr<Stmt>> finalAST;
+    Newt interpreter;
 
     void compile(const fs::path& filepath) {
         file.filepath = filepath;
@@ -72,6 +74,9 @@ class compiler {
         Preprocessor preprocessor;
         preprocessor.flattenAST(std::move(parsedAST));
         finalAST = std::move(preprocessor.processedAST);
+        GpuScheduler gpuScheduler;
+        gpuScheduler.run(finalAST);
+        interpreter.runAST(finalAST);
     }
 
 };
